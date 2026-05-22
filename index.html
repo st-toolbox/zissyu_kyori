@@ -158,6 +158,15 @@
           <button class="btn btn-primary btn-sm" onclick="startBatchCalc('missing')"><i class="bi bi-play-fill"></i> 未計算を実行</button>
           <button class="btn btn-outline-primary btn-sm" onclick="startBatchCalc('all')">一括計算(リセット)</button>
           <button class="btn btn-outline-danger btn-sm" id="btn-stop-calc" onclick="stopBatchCalc()" disabled><i class="bi bi-stop-fill"></i> 中断</button>
+          <div class="d-flex align-items-center gap-1 ms-2">
+            <label class="small text-muted mb-0" style="white-space:nowrap">並列数:</label>
+            <select id="concurrency-select" class="form-select form-select-sm" style="width:75px">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="5">5</option>
+            </select>
+          </div>
         </div>
         <div class="progress-area">
           <div class="d-flex justify-content-between small text-muted">
@@ -788,12 +797,31 @@ function startBatchCalc(mode, targetStudentName) {
 }
 
 async function processQueueClient() {
-  if (!isCalculating || calcQueue.length === 0) {
-    stopBatchCalc(true); showMessage("すべての計算が完了しました。", "計算完了"); return;
+  const concurrency = parseInt(document.getElementById('concurrency-select')?.value) || 3;
+  document.getElementById('calc-status-text').innerText = `${concurrency}並列で計算中...`;
+  const workers = Array.from({ length: Math.min(concurrency, totalCalcTarget) }, () => runCalcWorker());
+  await Promise.all(workers);
+  if (isCalculating) {
+    stopBatchCalc(true);
+    showMessage("すべての計算が完了しました。", "計算完了");
   }
-  const item = calcQueue.shift();
+}
+
+async function runCalcWorker() {
+  while (isCalculating) {
+    const item = calcQueue.shift();
+    if (!item) break;
+    await calcOneItem(item);
+    finishedCalcCount++;
+    const pct = Math.round((finishedCalcCount / totalCalcTarget) * 100);
+    document.getElementById('calc-progress-bar').style.width = pct + "%";
+    document.getElementById('calc-progress-text').innerText = `${finishedCalcCount} / ${totalCalcTarget}`;
+    await new Promise(r => setTimeout(r, 150));
+  }
+}
+
+async function calcOneItem(item) {
   const st = appData.students.find(x => x.name === item.sName);
-  document.getElementById('calc-status-text').innerText = `計算中: ${item.sName} → ${item.target.lName}`;
   const cells = document.querySelectorAll(`.cell-calc[data-student="${CSS.escape(item.sName)}"][data-location="${CSS.escape(item.target.lName)}"]`);
   cells.forEach(c => { c.innerText = "…"; c.className = 'cell-calc cell-loading'; });
   try {
@@ -805,11 +833,6 @@ async function processQueueClient() {
   } catch(e) {
     cells.forEach(c => { c.innerText = "Err"; c.className = 'cell-calc cell-error'; });
   }
-  finishedCalcCount++;
-  const bar = document.getElementById('calc-progress-bar');
-  bar.style.width = Math.round((finishedCalcCount / totalCalcTarget) * 100) + "%";
-  document.getElementById('calc-progress-text').innerText = `${finishedCalcCount} / ${totalCalcTarget}`;
-  setTimeout(processQueueClient, 300);
 }
 
 function stopBatchCalc(isFinished = false) {
