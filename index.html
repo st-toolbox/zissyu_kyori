@@ -1127,8 +1127,10 @@ function renderPrintView() {
     const locName = card.dataset.locName;
     card.querySelectorAll('.student-card.placed').forEach(s => {
       const sName = s.dataset.name, info = appData.timeMap[sName + '_' + locName];
-      const shinBadge = info && info.hasShinkansen ? ' <span class="badge-shinkansen">新幹線</span>' : '';
-      h += `<tr><td>${locName}</td><td>${sName}</td><td>${info ? formatDuration(info.total) : '-'}${shinBadge}</td><td class="small text-muted">駅歩${info ? info.firstWalk : '-'}分</td></tr>`;
+      const isShin = info && info.hasShinkansen;
+      const timeStr = info ? formatDuration(info.total) : '-';
+      const timeCell = isShin ? `<span style="color:#dc3545;font-weight:bold">${timeStr}</span> <span class="badge-shinkansen">新幹線</span>` : timeStr;
+      h += `<tr><td>${locName}</td><td>${sName}</td><td>${timeCell}</td><td class="small text-muted">駅歩${info ? info.firstWalk : '-'}分</td></tr>`;
     });
   });
   document.getElementById('print-content').innerHTML = h + '</tbody></table>';
