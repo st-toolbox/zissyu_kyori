@@ -82,7 +82,9 @@
     @media print { .no-print { display: none !important; } body { background: white; padding: 0; } .app-status-bar { display: none; } }
     @keyframes blink { 50% { opacity: 0.5; } }
     #loading { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; }
-    .sortable-ghost { opacity: 0.4; background-color: #e7f1ff; border: 2px dashed #0d6efd; }
+    .sortable-ghost { opacity: 0.5; background: #c7e4ff; }
+    .cell-shinkansen { background-color: #ffe8d6 !important; color: #7c3100 !important; }
+    .badge-shinkansen { display:inline-block; background:#dc3545; color:#fff; font-size:0.65rem; padding:1px 3px; border-radius:3px; margin-left:2px; vertical-align:middle; line-height:1.3; }
     .btn-unlock-highlight { border: 2px dashed #dc3545 !important; color: #dc3545 !important; background: #fff !important; font-weight: bold; }
   </style>
 </head>
@@ -193,7 +195,7 @@
     </div>
     <div class="excel-container">
       <table class="excel-table" id="student-excel">
-        <thead><tr><th style="width:60px">学年</th><th style="width:100px">名前</th><th>住所</th><th style="width:60px">小児希望</th><th style="width:45px">評価</th><th style="width:45px">総合</th><th style="width:45px">見学</th><th style="width:100px">過去1</th><th style="width:100px">過去2</th></tr></thead>
+        <thead><tr><th style="width:60px">学年</th><th style="width:100px">名前</th><th style="width:180px">住所</th><th style="width:60px">小児希望</th><th style="width:45px">評価</th><th style="width:45px">総合</th><th style="width:45px">見学</th><th style="width:100px">過去1</th><th style="width:100px">過去2</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -210,7 +212,7 @@
     </div>
     <div class="excel-container">
       <table class="excel-table" id="location-excel">
-        <thead><tr><th style="width:60px">種別</th><th style="width:160px">施設名</th><th>住所</th><th style="width:45px">小児</th><th style="width:70px">時間</th></tr></thead>
+        <thead><tr><th style="width:60px">種別</th><th style="width:160px">施設名</th><th style="width:180px">住所</th><th style="width:45px">小児</th><th style="width:70px">時間</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -420,16 +422,18 @@ function parseTimeVal(v) {
   if (!v) return null;
   if (typeof v === 'object' && v.status) return v;
   const s = String(v);
-  if (s.startsWith('//')) {
-    const m = parseInt(s.slice(2));
-    return { status: 'OK', total: m, isWalkingOnly: true, text: `徒歩${m}分`, firstWalk: 0, totalWalk: m };
+  const hasShinkansen = s.startsWith('S');
+  const raw = hasShinkansen ? s.slice(1) : s;
+  if (raw.startsWith('//')) {
+    const m = parseInt(raw.slice(2));
+    return { status: 'OK', total: m, isWalkingOnly: true, text: `徒歩${m}分`, firstWalk: 0, totalWalk: m, hasShinkansen };
   }
-  if (s.includes('|')) {
-    const p = s.split('|');
+  if (raw.includes('|')) {
+    const p = raw.split('|');
     const total = parseInt(p[0]);
-    return { status: 'OK', total, firstWalk: parseInt(p[1]) || 0, totalWalk: parseInt(p[2]) || 0, text: formatDuration(total) };
+    return { status: 'OK', total, firstWalk: parseInt(p[1]) || 0, totalWalk: parseInt(p[2]) || 0, text: formatDuration(total), hasShinkansen };
   }
-  return { status: 'ERROR', text: s };
+  return { status: 'ERROR', text: raw };
 }
 
 // ===== GAS API（経路計算のみ） =====
@@ -590,8 +594,9 @@ function selectStudent(c, name) {
       const cls = info.total < 60 ? 'time-val-safe' : info.total < 90 ? 'time-val-warn' : 'time-val-danger';
       const sEsc = name.replace(/'/g, "\\'");
       const lEsc = lname.replace(/'/g, "\\'");
+      const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新</span>' : '';
       ov.innerHTML = `
-        <div class="overlay-time ${cls}">${formatDuration(info.total)}</div>
+        <div class="overlay-time ${cls}">${formatDuration(info.total)}${shinBadge}</div>
         <div class="overlay-detail">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div>
         <div class="overlay-btns">
           <button class="btn btn-outline-secondary btn-sm py-0" onclick="ovDetail('${sEsc}','${lEsc}',event)">詳細</button>
@@ -639,7 +644,8 @@ function updateCard(el, loc) {
   let h = `<div class="placed-header"><span class="placed-name">${s}</span><button class="placed-btn-analyze">詳細</button></div>`;
   if (info && info.status === 'OK') {
     const cls = info.total < 60 ? 'text-success' : info.total < 90 ? 'text-warning' : 'text-danger';
-    h += `<div class="placed-details"><div class="placed-time-main ${cls}">${formatDuration(info.total)}</div><div class="placed-time-sub">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
+    const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新</span>' : '';
+    h += `<div class="placed-details"><div class="placed-time-main ${cls}">${formatDuration(info.total)}${shinBadge}</div><div class="placed-time-sub">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
   } else {
     h += `<div class="text-end text-danger small">${info ? info.text : "未計算"}</div>`;
   }
@@ -721,10 +727,12 @@ async function recalc(s, l) {
   }
   try {
     const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: lo.address, time: lo.time });
-    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly };
-    cells.forEach(c => { c.className = 'cell-calc ' + (r.success ? 'cell-ok' : 'cell-error'); c.innerHTML = getCellHtml(info); });
+    const hasShinkansen = r.success && r.text && r.text.includes('新幹線');
+    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly, hasShinkansen };
+    const storeVal = r.success ? (hasShinkansen ? 'S' + r.valStr : r.valStr) : r.text;
+    cells.forEach(c => { c.className = 'cell-calc ' + (r.success ? (hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error'); c.innerHTML = getCellHtml(info); });
     appData.timeMap[s + '_' + l] = info;
-    db.ref('/timeMap/' + tmKey(s, l)).set(r.success ? r.valStr : r.text);
+    db.ref('/timeMap/' + tmKey(s, l)).set(storeVal);
   } catch(e) {
     cells.forEach(c => { c.className = 'cell-calc cell-error'; c.innerText = "エラー"; });
   }
@@ -826,10 +834,12 @@ async function calcOneItem(item) {
   cells.forEach(c => { c.innerText = "…"; c.className = 'cell-calc cell-loading'; });
   try {
     const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: item.target.lAddr, time: item.target.time });
-    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly };
-    cells.forEach(c => { c.innerHTML = getCellHtml(info); c.className = 'cell-calc ' + (r.success ? 'cell-ok' : 'cell-error'); });
+    const hasShinkansen = r.success && r.text && r.text.includes('新幹線');
+    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly, hasShinkansen };
+    const storeVal = r.success ? (hasShinkansen ? 'S' + r.valStr : r.valStr) : r.text;
+    cells.forEach(c => { c.innerHTML = getCellHtml(info); c.className = 'cell-calc ' + (r.success ? (hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error'); });
     appData.timeMap[item.sName + '_' + item.target.lName] = info;
-    db.ref('/timeMap/' + tmKey(item.sName, item.target.lName)).set(r.success ? r.valStr : r.text);
+    db.ref('/timeMap/' + tmKey(item.sName, item.target.lName)).set(storeVal);
   } catch(e) {
     cells.forEach(c => { c.innerText = "Err"; c.className = 'cell-calc cell-error'; });
   }
@@ -864,7 +874,7 @@ function renderMatrix() {
       const isT = col.type === 'obs' ? s.isObservation : col.type === 'eval' ? s.isEvaluation : s.isComprehensive;
       if (!isT) { body += `<td class="cell-calc cell-disabled">×</td>`; return; }
       const inf = appData.timeMap[s.name + '_' + col.name];
-      const cls = !inf ? 'cell-empty' : inf.status === 'OK' ? 'cell-ok' : 'cell-error';
+      const cls = !inf ? 'cell-empty' : inf.status === 'OK' ? (inf.hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error';
       const lEsc = col.name.replace(/'/g, "\\'").replace(/\\/g, "\\\\");
       body += `<td class="cell-calc ${cls}" data-student="${s.name}" data-location="${col.name}" onclick="recalc('${sEsc}','${lEsc}')">${getCellHtml(inf)}</td>`;
     });
@@ -876,10 +886,11 @@ function renderMatrix() {
 function getCellHtml(info) {
   if (!info) return "未";
   if (info.status !== 'OK') return info.text || "エラー";
-  if (info.isWalkingOnly) return `<div class="text-primary fw-bold">徒歩${info.total}分</div>`;
+  const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新</span>' : '';
+  if (info.isWalkingOnly) return `<div class="text-primary fw-bold">徒歩${info.total}分${shinBadge}</div>`;
   const total = parseInt(info.total);
   const cls = total < 60 ? "text-success" : total > 100 ? "text-orange" : "";
-  return `<div class="${cls}"><div class="fw-bold">${formatDuration(total)}</div><div style="font-size:0.75em">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
+  return `<div class="${cls}"><div class="fw-bold">${formatDuration(total)}${shinBadge}</div><div style="font-size:0.75em">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
 }
 
 // ===== 詳細ルートモーダル =====
@@ -898,8 +909,14 @@ async function openDetail(sName, lName) {
     const res = await callGasApi('getDeepRouteAnalysis', { origin: st.address, dest: lo.address, time: lo.time });
     const renderRoute = (route, title, colorClass) => {
       if (!route || !route.found) return `<div class="alert alert-secondary mb-3">${title}: ルートが見つかりませんでした</div>`;
-      let html = `<div class="card mb-3"><div class="card-header ${colorClass} text-white d-flex justify-content-between align-items-center"><span>${title}</span><span class="badge bg-light text-dark">${route.depart} - ${route.arrive} (${route.duration})</span></div><div class="card-body bg-light"><div class="timeline">`;
-      route.steps.forEach(step => { html += `<div class="timeline-item"><div class="timeline-content">${step}</div></div>`; });
+      const hasShin = route.steps && route.steps.some(s => s.includes('新幹線'));
+      const shinAlert = hasShin ? '<div class="alert alert-warning py-1 px-2 mb-2 small"><strong><span class="badge-shinkansen">新</span> 新幹線を含むルートです。</strong></div>' : '';
+      const titleBadge = hasShin ? ` <span class="badge-shinkansen">新</span>` : '';
+      let html = `<div class="card mb-3"><div class="card-header ${colorClass} text-white d-flex justify-content-between align-items-center"><span>${title}${titleBadge}</span><span class="badge bg-light text-dark">${route.depart} - ${route.arrive} (${route.duration})</span></div><div class="card-body bg-light">${shinAlert}<div class="timeline">`;
+      route.steps.forEach(step => {
+        const isShin = step.includes('新幹線');
+        html += `<div class="timeline-item"><div class="timeline-content${isShin ? ' border-danger' : ''}">${step}${isShin ? ' <span class="badge-shinkansen">新</span>' : ''}</div></div>`;
+      });
       return html + `</div></div></div>`;
     };
     resDiv.innerHTML = renderRoute(res.primary, "最適ルート", "bg-success") + renderRoute(res.early, "1本前 (余裕あり)", "bg-primary");
