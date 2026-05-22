@@ -426,6 +426,7 @@ function parseTimeVal(v) {
   const raw = hasShinkansen ? s.slice(1) : s;
   if (raw.startsWith('//')) {
     const m = parseInt(raw.slice(2));
+    if (m > 120) return { status: 'ERROR', text: '経路なし' };
     return { status: 'OK', total: m, isWalkingOnly: true, text: `徒歩${m}分`, firstWalk: 0, totalWalk: m, hasShinkansen };
   }
   if (raw.includes('|')) {
@@ -728,9 +729,11 @@ async function recalc(s, l) {
   try {
     const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: lo.address, time: lo.time });
     const hasShinkansen = r.success && r.text && r.text.includes('新幹線');
-    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly, hasShinkansen };
-    const storeVal = r.success ? (hasShinkansen ? 'S' + r.valStr : r.valStr) : r.text;
-    cells.forEach(c => { c.className = 'cell-calc ' + (r.success ? (hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error'); c.innerHTML = getCellHtml(info); });
+    const noRoute = r.success && r.isWalkingOnly && r.minutes > 120;
+    const ok = r.success && !noRoute;
+    const info = { status: ok ? 'OK' : 'ERROR', text: noRoute ? '経路なし' : ok ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly, hasShinkansen };
+    const storeVal = ok ? (hasShinkansen ? 'S' + r.valStr : r.valStr) : (noRoute ? '経路なし' : r.text);
+    cells.forEach(c => { c.className = 'cell-calc ' + (ok ? (hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error'); c.innerHTML = getCellHtml(info); });
     appData.timeMap[s + '_' + l] = info;
     db.ref('/timeMap/' + tmKey(s, l)).set(storeVal);
   } catch(e) {
@@ -835,9 +838,11 @@ async function calcOneItem(item) {
   try {
     const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: item.target.lAddr, time: item.target.time });
     const hasShinkansen = r.success && r.text && r.text.includes('新幹線');
-    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly, hasShinkansen };
-    const storeVal = r.success ? (hasShinkansen ? 'S' + r.valStr : r.valStr) : r.text;
-    cells.forEach(c => { c.innerHTML = getCellHtml(info); c.className = 'cell-calc ' + (r.success ? (hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error'); });
+    const noRoute = r.success && r.isWalkingOnly && r.minutes > 120;
+    const ok = r.success && !noRoute;
+    const info = { status: ok ? 'OK' : 'ERROR', text: noRoute ? '経路なし' : ok ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly, hasShinkansen };
+    const storeVal = ok ? (hasShinkansen ? 'S' + r.valStr : r.valStr) : (noRoute ? '経路なし' : r.text);
+    cells.forEach(c => { c.innerHTML = getCellHtml(info); c.className = 'cell-calc ' + (ok ? (hasShinkansen ? 'cell-shinkansen' : 'cell-ok') : 'cell-error'); });
     appData.timeMap[item.sName + '_' + item.target.lName] = info;
     db.ref('/timeMap/' + tmKey(item.sName, item.target.lName)).set(storeVal);
   } catch(e) {
