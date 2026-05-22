@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>実習マッチング</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+  <style>
+    body { background-color: #f8f9fa; font-size: 0.9rem; color: #333; padding-bottom: 60px; user-select: none; padding-top: 40px; }
+    #login-screen { position: fixed; top:0; left:0; width:100%; height:100%; background:#fff; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+    .app-status-bar { position: fixed; top: 0; left: 0; width: 100%; height: 40px; background: #343a40; color: white; z-index: 1030; display: flex; align-items: center; justify-content: center; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .status-locked { background: #198754; }
+    .nav-tabs .nav-link.active { font-weight: bold; border-top: 3px solid #0d6efd; color: #0d6efd; background: white; }
+    .board-toolbar { background: #fff; padding: 10px 20px; border-bottom: 1px solid #dee2e6; display: flex; align-items: center; justify-content: space-between; }
+    .board-container { display: flex; gap: 20px; height: calc(100vh - 200px); padding: 15px; }
+    .student-pool-wrapper { width: 260px; display: flex; flex-direction: column; background: #fff; border: 1px solid #dee2e6; border-radius: 6px; }
+    .pool-header-top { padding: 8px; background: #f8f9fa; border-bottom: 1px solid #eee; text-align: center; }
+    .student-pool { flex: 1; padding: 10px; overflow-y: auto; }
+    .hospital-container { flex: 1; overflow-y: auto; padding: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start; }
+    .hospital-card { width: 195px; min-height: 120px; background: white; position: relative; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+    .hospital-header { padding: 4px 6px; background: #fff; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 20; }
+    .hospital-title { font-weight: bold; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .hospital-time { font-size: 0.75rem; background: #e9ecef; padding: 1px 4px; border-radius: 4px; color: #495057; }
+    .hospital-body { flex: 1; padding: 2px; min-height: 90px; position: relative; }
+    .border-obs { border-left: 5px solid #20c997; } .border-eval { border-left: 5px solid #fd7e14; } .border-comp { border-left: 5px solid #6610f2; }
+    .time-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.96); z-index: 10; border-radius: 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.1s; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1); padding-top: 35px; }
+    .time-overlay.active { opacity: 1; pointer-events: auto; }
+    .overlay-time { font-size: 1.3rem; font-weight: 800; line-height: 1.2; margin-bottom: 2px; white-space: nowrap; }
+    .overlay-detail { font-size: 0.8rem; color: #555; line-height: 1.2; text-align: center; }
+    .overlay-btns { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; justify-content: center; }
+    .time-val-safe { color: #198754; } .time-val-warn { color: #fd7e14; } .time-val-danger { color: #dc3545; font-size: 1rem; }
+    .student-card { background: white; padding: 4px 6px; margin-bottom: 2px; border: 1px solid #ced4da; border-radius: 4px; cursor: grab; display: flex; justify-content: space-between; align-items: center; transition: all 0.1s; font-size: 0.85rem; }
+    .student-card:active { cursor: grabbing; }
+    .student-card:hover { border-color: #0d6efd; }
+    .student-card.selected { background-color: #e7f1ff; border-color: #0d6efd; border-width: 2px; }
+    .student-card-inner { flex-grow: 1; pointer-events: none; }
+    .student-card.placed { display: block; padding: 4px; }
+    .placed-header { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 1px; }
+    .placed-name { font-weight: bold; font-size: 0.85rem; }
+    .placed-btn-analyze { font-size: 0.7rem; padding: 0px 6px; font-weight: bold; border: 1px solid #0d6efd; color: #fff; background: #0d6efd; border-radius: 4px; cursor: pointer; }
+    .placed-btn-analyze:hover { background: #0b5ed7; }
+    .placed-details { text-align: right; line-height: 1.2; }
+    .placed-time-main { font-weight: bold; font-size: 0.9rem; }
+    .placed-time-sub { font-size: 0.75rem; color: #666; }
+    .badge-time { font-weight: bold; min-width: 40px; text-align: right; font-size: 0.9em; }
+    .time-neutral { color: #adb5bd; }
+    .excel-container { height: calc(100vh - 190px); overflow: auto; background: white; border: 1px solid #ccc; position: relative; }
+    .excel-container.locked::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(128,128,128,0.15); z-index: 100; pointer-events: none; }
+    .excel-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .excel-table th, .excel-table td { border: 1px solid #ddd; padding: 0; height: 30px; min-width: 80px; position: relative; }
+    .excel-table th { background: #f8f9fa; font-weight: normal; text-align: center; color: #666; position: sticky; top: 0; z-index: 5; }
+    .excel-cell { width: 100%; height: 100%; border: none; padding: 4px 8px; font-size: 0.9rem; outline: none; background: transparent; }
+    .calc-container { padding: 20px; display: flex; flex-direction: column; gap: 15px; height: calc(100vh - 100px); }
+    .calc-toolbar { display: flex; align-items: center; gap: 15px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); flex-wrap: wrap; }
+    .progress-area { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; }
+    .progress { height: 20px; background-color: #e9ecef; border-radius: 4px; }
+    .matrix-wrapper { flex: 1; overflow: auto; background: white; border: 1px solid #ccc; border-radius: 4px; }
+    .matrix-table { border-collapse: collapse; font-size: 0.85rem; table-layout: fixed; }
+    .matrix-table th, .matrix-table td { border: 1px solid #ddd; padding: 2px; text-align: center; width: 85px; height: 45px; overflow: hidden; font-size: 0.75rem; vertical-align: middle; white-space: normal; }
+    .matrix-table thead th { position: sticky; top: 0; background: #f8f9fa; z-index: 5; border-bottom: 2px solid #ccc; }
+    .matrix-table tbody th { position: sticky; left: 0; background: #f8f9fa; z-index: 4; border-right: 2px solid #ccc; text-align: left; width: 140px; min-width: 140px; white-space: nowrap; padding: 4px 8px; }
+    .matrix-table thead th:first-child { z-index: 6; left: 0; }
+    .cell-calc { cursor: pointer; transition: background 0.1s; } .cell-calc:hover { outline: 2px solid #0d6efd; z-index: 2; }
+    .cell-empty { background-color: #f0f0f0; color: #999; } .cell-ok { background-color: #d1e7dd; color: #0f5132; } .cell-error { background-color: #f8d7da; color: #842029; } .cell-loading { background-color: #fff3cd; color: #856404; animation: blink 1s infinite; }
+    .cell-disabled { background-color: #e9ecef !important; color: #adb5bd !important; cursor: default !important; pointer-events: none; }
+    .toggle-cell { cursor: pointer; text-align: center; caret-color: transparent; }
+    .toggle-cell:hover { background-color: #e9ecef; }
+    .val-true { color: #198754; font-weight: bold; } .val-false { color: #adb5bd; }
+    .cell-obs { background-color: #d1e7dd !important; } .cell-eval { background-color: #fff3cd !important; } .cell-comp { background-color: #cff4fc !important; }
+    .text-orange { color: #d65b00 !important; }
+    .timeline { position: relative; padding-left: 20px; border-left: 2px solid #dee2e6; margin-left: 10px; margin-top: 10px; }
+    .timeline-item { position: relative; margin-bottom: 15px; }
+    .timeline-item::before { content: ''; position: absolute; left: -26px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #0d6efd; border: 2px solid #fff; }
+    .timeline-content { background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid #eee; font-size: 0.9rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .header-loc { width: 100%; height: 2.4em; font-size: 0.75rem; line-height: 1.2; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; word-break: break-all; }
+    .badge-pediatric { display: inline-block; background-color: #dc3545; color: white; font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; margin-left: 4px; vertical-align: middle; line-height: 1.2; }
+    .excel-cell.selected { background-color: #e7f1ff !important; outline: 2px solid #0d6efd; z-index: 10; }
+    .type-selector-cell { cursor: pointer; } .type-selector-cell:hover { background-color: #e9ecef; }
+    .print-area { background: white; padding: 20px; min-height: 100vh; }
+    @media print { .no-print { display: none !important; } body { background: white; padding: 0; } .app-status-bar { display: none; } }
+    @keyframes blink { 50% { opacity: 0.5; } }
+    #loading { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(255,255,255,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+    .sortable-ghost { opacity: 0.4; background-color: #e7f1ff; border: 2px dashed #0d6efd; }
+    .btn-unlock-highlight { border: 2px dashed #dc3545 !important; color: #dc3545 !important; background: #fff !important; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<!-- ログイン画面 -->
+<div id="login-screen">
+  <div class="text-center p-5">
+    <i class="bi bi-hospital fs-1 text-primary"></i>
+    <h3 class="mt-3 mb-2">実習マッチング</h3>
+    <p class="text-muted mb-4 small">@asahi.ac.jp または @oky.asahi.ac.jp アカウントでログインしてください</p>
+    <button class="btn btn-primary btn-lg" onclick="signIn()">
+      <i class="bi bi-google me-2"></i>Googleでログイン
+    </button>
+    <div id="login-error" class="text-danger mt-3 small"></div>
+  </div>
+</div>
+
+<!-- メインアプリ -->
+<div id="main-app" style="display:none">
+
+<div class="app-status-bar" id="statusBar">
+  <span id="statusText"><i class="bi bi-pencil-square"></i> リスト編集中</span>
+  <span id="user-badge" class="ms-3 badge bg-secondary" style="font-size:0.7rem;font-weight:normal"></span>
+</div>
+
+<ul class="nav nav-tabs px-3 pt-2 bg-white border-bottom-0 no-print" id="myTab" role="tablist">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#match">🧩 マッチング</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#calc">⚡ 所要時間計算</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#student">👨‍🎓 学生リスト編集</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#location">🏥 実習リスト編集</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#print" onclick="renderPrintView()">🖨️ 印刷画面</button></li>
+</ul>
+
+<div class="tab-content">
+  <!-- マッチングタブ -->
+  <div class="tab-pane fade show active" id="match" role="tabpanel">
+    <div class="board-toolbar no-print">
+      <div class="btn-group" role="group">
+        <input type="radio" class="btn-check" name="btnradio" id="btn-eval" value="evaluation" checked onchange="renderBoard()">
+        <label class="btn btn-outline-warning" for="btn-eval">評価</label>
+        <input type="radio" class="btn-check" name="btnradio" id="btn-comp" value="comprehensive" onchange="renderBoard()">
+        <label class="btn btn-outline-primary" for="btn-comp">総合</label>
+        <input type="radio" class="btn-check" name="btnradio" id="btn-obs" value="observation" onchange="renderBoard()">
+        <label class="btn btn-outline-success" for="btn-obs">見学</label>
+      </div>
+      <div id="match-stats" class="d-flex align-items-center small text-muted mx-3 flex-grow-1"></div>
+      <div class="d-flex gap-1">
+        <button class="btn btn-outline-secondary btn-sm" onclick="loadData()"><i class="bi bi-arrow-clockwise"></i> リスト更新</button>
+        <button class="btn btn-outline-dark btn-sm" onclick="saveStateUI()"><i class="bi bi-save2"></i> 配置を保存</button>
+        <button class="btn btn-outline-dark btn-sm" onclick="loadStateUI()"><i class="bi bi-folder2-open"></i> 配置を読込</button>
+        <button class="btn btn-dark btn-sm" onclick="saveMatchingResult()"><i class="bi bi-file-earmark-check"></i> 確定結果を出力</button>
+      </div>
+    </div>
+    <div class="board-container">
+      <div class="student-pool-wrapper">
+        <div class="pool-header-top fw-bold">未配置リスト</div>
+        <div id="unassigned-list" class="student-pool" onclick="onPoolClick(event)"></div>
+      </div>
+      <div class="hospital-container" id="hospital-area" onclick="onHospitalAreaClick(event)"></div>
+    </div>
+  </div>
+
+  <!-- 計算タブ -->
+  <div class="tab-pane fade p-3" id="calc" role="tabpanel">
+    <div class="calc-container">
+      <div class="calc-toolbar no-print">
+        <div class="d-flex gap-1">
+          <button class="btn btn-secondary btn-sm" id="btn-sync-list" onclick="syncList()"><i class="bi bi-table"></i> リストから読込</button>
+          <button class="btn btn-primary btn-sm" onclick="startBatchCalc('missing')"><i class="bi bi-play-fill"></i> 未計算を実行</button>
+          <button class="btn btn-outline-primary btn-sm" onclick="startBatchCalc('all')">一括計算(リセット)</button>
+          <button class="btn btn-outline-danger btn-sm" id="btn-stop-calc" onclick="stopBatchCalc()" disabled><i class="bi bi-stop-fill"></i> 中断</button>
+        </div>
+        <div class="progress-area">
+          <div class="d-flex justify-content-between small text-muted">
+            <span id="calc-status-text">待機中</span>
+            <span id="calc-progress-text">0 / 0</span>
+          </div>
+          <div class="progress"><div id="calc-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="matrix-wrapper">
+        <table class="matrix-table" id="matrix-table"><thead></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 学生リストタブ -->
+  <div class="tab-pane fade p-3" id="student" role="tabpanel">
+    <div class="d-flex justify-content-between mb-2 no-print">
+      <div></div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-danger btn-sm" onclick="resetList('student')"><i class="bi bi-trash"></i> リセット</button>
+        <button class="btn btn-warning btn-sm btn-lock-action" onclick="toggleLock()">リストを確定する</button>
+      </div>
+    </div>
+    <div class="excel-container">
+      <table class="excel-table" id="student-excel">
+        <thead><tr><th style="width:60px">学年</th><th style="width:100px">名前</th><th>住所</th><th style="width:60px">小児希望</th><th style="width:45px">評価</th><th style="width:45px">総合</th><th style="width:45px">見学</th><th style="width:100px">過去1</th><th style="width:100px">過去2</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 実習リストタブ -->
+  <div class="tab-pane fade p-3" id="location" role="tabpanel">
+    <div class="d-flex justify-content-between mb-2 no-print">
+      <div></div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-danger btn-sm" onclick="resetList('location')"><i class="bi bi-trash"></i> リセット</button>
+        <button class="btn btn-warning btn-sm btn-lock-action" onclick="toggleLock()">リストを確定する</button>
+      </div>
+    </div>
+    <div class="excel-container">
+      <table class="excel-table" id="location-excel">
+        <thead><tr><th style="width:60px">種別</th><th style="width:160px">施設名</th><th>住所</th><th style="width:45px">小児</th><th style="width:70px">時間</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 印刷タブ -->
+  <div class="tab-pane fade p-3" id="print" role="tabpanel">
+    <div class="d-flex justify-content-end mb-3 no-print">
+      <button class="btn btn-lg btn-success" onclick="window.print()"><i class="bi bi-printer"></i> 印刷</button>
+    </div>
+    <div class="print-area" id="print-content"></div>
+  </div>
+</div>
+
+</div><!-- /main-app -->
+
+<!-- 詳細ルートモーダル -->
+<div class="modal fade" id="analysisModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title">詳細ルート</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body"><div id="analysis-result"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 通知モーダル -->
+<div class="modal fade" id="messageModal" tabindex="-1">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h6 class="modal-title" id="msg-modal-title">通知</h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body text-center" id="msg-modal-body"></div>
+      <div class="modal-footer p-1">
+        <button type="button" class="btn btn-secondary btn-sm w-100" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="loading" style="display:none">
+  <div class="spinner-border text-primary"></div>
+  <div class="mt-2 text-muted" id="loading-msg">Loading...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<script>
+// ===== Firebase 初期化 =====
+const firebaseConfig = {
+  apiKey: "AIzaSyDcpjRgLTUTHeMIsXznh9P1em87YXC0Kwc",
+  authDomain: "zissyu-kyori.firebaseapp.com",
+  databaseURL: "https://zissyu-kyori-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "zissyu-kyori",
+  storageBucket: "zissyu-kyori.firebasestorage.app",
+  messagingSenderId: "748477721511",
+  appId: "1:748477821511:web:943fc09d5405d640586482"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+// ===== GAS URL（経路計算のみ） =====
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyJWAqFBJpr9M0o5D2fVZprGtbG9h1r8oJ6bdRxqjem0toy6iJSuc0MhjzRWRGbGPNduQ/exec";
+
+const ALLOWED_DOMAINS = ["asahi.ac.jp", "oky.asahi.ac.jp"];
+
+// ===== アプリ状態 =====
+let appData = { isLocked: false, students: [], locations: [], timeMap: {}, assignments: {} };
+let selectedStudentName = null;
+let isCalculating = false, calcQueue = [], totalCalcTarget = 0, finishedCalcCount = 0;
+let selection = { start: null, end: null, active: false, tableId: null };
+let autoSaveTimer = null;
+
+// ===== Firebase キーエンコード =====
+// Firebase キーに使えない文字: . # $ / [ ]
+function toFbKey(str) {
+  return String(str)
+    .replace(/\./g, '・').replace(/#/g, '＃').replace(/\$/g, '＄')
+    .replace(/\[/g, '［').replace(/\]/g, '］').replace(/\//g, '／');
+}
+function fromFbKey(str) {
+  return String(str)
+    .replace(/・/g, '.').replace(/＃/g, '#').replace(/＄/g, '$')
+    .replace(/［/g, '[').replace(/］/g, ']').replace(/／/g, '/');
+}
+function tmKey(s, l) { return toFbKey(s) + '__' + toFbKey(l); }
+
+// ===== 認証 =====
+auth.onAuthStateChanged(user => {
+  if (user) {
+    const domain = user.email.split('@')[1];
+    if (!ALLOWED_DOMAINS.includes(domain)) {
+      auth.signOut();
+      document.getElementById('login-error').innerText =
+        `このアプリは ${ALLOWED_DOMAINS.join(' / ')} のアカウントのみ使用できます。`;
+      return;
+    }
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    document.getElementById('user-badge').innerText = user.email;
+    loadData();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('main-app').style.display = 'none';
+  }
+});
+
+function signIn() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(e => {
+    document.getElementById('login-error').innerText = 'ログインエラー: ' + e.message;
+  });
+}
+
+// ===== データ読込 =====
+function loadData() {
+  showLoading("データ読み込み中...");
+  Promise.all([
+    db.ref('/config').once('value'),
+    db.ref('/students').once('value'),
+    db.ref('/locations').once('value'),
+    db.ref('/timeMap').once('value'),
+    db.ref('/assignments').once('value'),
+  ]).then(([cfgSnap, stuSnap, locSnap, tmSnap, asnSnap]) => {
+    const cfg = cfgSnap.val() || {};
+    appData.isLocked = !!cfg.isLocked;
+
+    // 学生
+    const studentsRaw = [];
+    appData.students = [];
+    const stuObj = stuSnap.val() || {};
+    Object.values(stuObj).sort((a, b) => (a._order || 0) - (b._order || 0)).forEach(s => {
+      if (!s.name) return;
+      appData.students.push({
+        name: s.name, grade: s.grade || '3年', address: s.address || '',
+        isPediatric: !!s.isPediatric, isEvaluation: !!s.isEvaluation,
+        isComprehensive: !!s.isComprehensive, isObservation: !!s.isObservation,
+        past1: s.past1 || '', past2: s.past2 || ''
+      });
+      studentsRaw.push([s.grade || '3年', s.name, s.address || '',
+        s.isPediatric ? '○' : '×', s.isEvaluation ? '○' : '×',
+        s.isComprehensive ? '○' : '×', s.isObservation ? '○' : '×',
+        s.past1 || '', s.past2 || '']);
+    });
+
+    // 実習地
+    const locationsRaw = [];
+    appData.locations = [];
+    const locObj = locSnap.val() || {};
+    Object.values(locObj).sort((a, b) => (a._order || 0) - (b._order || 0)).forEach(l => {
+      if (!l.name) return;
+      const t = l.type || '評価';
+      appData.locations.push({
+        name: l.name, address: l.address || '', time: l.time || '8:10',
+        isPediatric: !!l.isPediatric, type: t,
+        isEvaluation: t.includes('評価'), isComprehensive: t.includes('総合'), isObservation: t.includes('見学')
+      });
+      locationsRaw.push([t, l.name, l.address || '', l.isPediatric ? '○' : '×', l.time || '8:10']);
+    });
+
+    // 所要時間マップ
+    appData.timeMap = {};
+    const tmObj = tmSnap.val() || {};
+    Object.entries(tmObj).forEach(([k, v]) => {
+      const sep = k.indexOf('__');
+      if (sep === -1) return;
+      const sKey = k.substring(0, sep);
+      const lKey = k.substring(sep + 2);
+      const mapKey = fromFbKey(sKey) + '_' + fromFbKey(lKey);
+      appData.timeMap[mapKey] = parseTimeVal(v);
+    });
+
+    // 配置
+    appData.assignments = {};
+    const asnObj = asnSnap.val() || {};
+    Object.entries(asnObj).forEach(([k, v]) => { appData.assignments[fromFbKey(k)] = v; });
+
+    hideLoading();
+    updateLockUI();
+    initExcel('student', studentsRaw, 50);
+    initExcel('location', locationsRaw, 30);
+    renderAll();
+  }).catch(e => { hideLoading(); alert('データ読込エラー: ' + e.message); console.error(e); });
+}
+
+function parseTimeVal(v) {
+  if (!v) return null;
+  if (typeof v === 'object' && v.status) return v;
+  const s = String(v);
+  if (s.startsWith('//')) {
+    const m = parseInt(s.slice(2));
+    return { status: 'OK', total: m, isWalkingOnly: true, text: `徒歩${m}分`, firstWalk: 0, totalWalk: m };
+  }
+  if (s.includes('|')) {
+    const p = s.split('|');
+    const total = parseInt(p[0]);
+    return { status: 'OK', total, firstWalk: parseInt(p[1]) || 0, totalWalk: parseInt(p[2]) || 0, text: formatDuration(total) };
+  }
+  return { status: 'ERROR', text: s };
+}
+
+// ===== GAS API（経路計算のみ） =====
+function callGasApi(action, payload = null) {
+  return fetch(GAS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action, payload }),
+    headers: { 'Content-Type': 'text/plain' }
+  }).then(r => r.json()).then(r => {
+    if (r.status === 'ERROR') throw new Error(r.message);
+    return r.data;
+  });
+}
+
+// ===== Firebase 書込 =====
+function fbSaveStudents(rows) {
+  const data = {};
+  rows.forEach((r, i) => {
+    data['s' + String(i).padStart(3, '0')] = {
+      _order: i, grade: r[0] || '3年', name: r[1] || '', address: r[2] || '',
+      isPediatric: r[3] === '○' || r[3] === true,
+      isEvaluation: r[4] === '○' || r[4] === true,
+      isComprehensive: r[5] === '○' || r[5] === true,
+      isObservation: r[6] === '○' || r[6] === true,
+      past1: r[7] || '', past2: r[8] || ''
+    };
+  });
+  return db.ref('/students').set(data);
+}
+
+function fbSaveLocations(rows) {
+  const data = {};
+  rows.forEach((r, i) => {
+    data['l' + String(i).padStart(3, '0')] = {
+      _order: i, type: r[0] || '評価', name: r[1] || '', address: r[2] || '',
+      isPediatric: r[3] === '○' || r[3] === true,
+      time: r[4] || '8:10'
+    };
+  });
+  return db.ref('/locations').set(data);
+}
+
+// ===== ロック =====
+function updateLockUI() {
+  const bar = document.getElementById('statusBar');
+  const text = document.getElementById('statusText');
+  const badge = document.getElementById('user-badge');
+  const btns = document.querySelectorAll('.btn-lock-action');
+  const containers = document.querySelectorAll('.excel-container');
+  if (appData.isLocked) {
+    bar.className = 'app-status-bar status-locked';
+    text.innerHTML = '<i class="bi bi-lock-fill"></i> リスト確定済（ロック中）';
+    btns.forEach(b => { b.innerText = "確定解除"; b.className = "btn btn-sm btn-unlock-highlight btn-lock-action"; });
+    containers.forEach(c => c.classList.add('locked'));
+  } else {
+    bar.className = 'app-status-bar';
+    text.innerHTML = '<i class="bi bi-pencil-square"></i> リスト編集中';
+    btns.forEach(b => { b.innerText = "リストを確定する"; b.className = "btn btn-warning btn-sm btn-lock-action"; });
+    containers.forEach(c => c.classList.remove('locked'));
+  }
+}
+
+function toggleLock() {
+  const newState = !appData.isLocked;
+  if (newState && !confirm("リストを確定してロックしますか？")) return;
+  appData.isLocked = newState;
+  updateLockUI();
+  db.ref('/config/isLocked').set(newState).catch(e => alert("ロック保存エラー: " + e.message));
+}
+
+// ===== ユーティリティ =====
+function showLoading(msg) { document.getElementById('loading-msg').innerText = msg; document.getElementById('loading').style.display = 'flex'; }
+function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+function showMessage(msg, title = "通知") {
+  document.getElementById('msg-modal-title').innerText = title;
+  document.getElementById('msg-modal-body').innerText = msg;
+  new bootstrap.Modal(document.getElementById('messageModal')).show();
+}
+function formatDuration(m) {
+  if (!m || isNaN(m)) return String(m);
+  const v = parseInt(m);
+  if (v < 60) return v + "分";
+  return Math.floor(v / 60) + "時間" + (v % 60 > 0 ? (v % 60) + "分" : "");
+}
+function checkType(l, t) { return t === 'observation' ? l.isObservation : t === 'evaluation' ? l.isEvaluation : l.isComprehensive; }
+function checkStudentType(s, t) { return t === 'observation' ? s.isObservation : t === 'evaluation' ? s.isEvaluation : s.isComprehensive; }
+
+function renderAll() {
+  try { renderBoard(); } catch(e) { console.error(e); }
+  try { renderMatrix(); } catch(e) { console.error(e); }
+}
+
+// ===== マッチングボード =====
+function renderBoard() {
+  selectedStudentName = null;
+  const type = document.querySelector('input[name="btnradio"]:checked').value;
+  const pool = document.getElementById('unassigned-list');
+  const area = document.getElementById('hospital-area');
+  pool.innerHTML = ''; area.innerHTML = '';
+
+  appData.locations.filter(l => checkType(l, type)).forEach(loc => {
+    const card = document.createElement('div');
+    const border = loc.isObservation ? 'border-obs' : loc.isEvaluation ? 'border-eval' : 'border-comp';
+    card.className = `hospital-card ${border}`;
+    card.dataset.locName = loc.name;
+    const icon = loc.isPediatric ? '<span class="badge-pediatric">小児</span>' : '';
+    card.innerHTML = `
+      <div class="hospital-header">
+        <span class="hospital-title">${loc.name}${icon}</span>
+        <span class="hospital-time">${loc.time}</span>
+      </div>
+      <div class="hospital-body list-group"></div>
+      <div class="time-overlay"></div>`;
+    area.appendChild(card);
+    new Sortable(card.querySelector('.hospital-body'), {
+      group: 'students', animation: 150, ghostClass: 'sortable-ghost',
+      onStart: evt => selectStudent(evt.item, evt.item.dataset.name),
+      onEnd: () => deselectStudent(),
+      onAdd: evt => handleDrop(evt.item, loc.name)
+    });
+  });
+
+  appData.students.filter(s => checkStudentType(s, type)).forEach(s => {
+    const el = createStudentCard(s);
+    const aLoc = appData.assignments[s.name];
+    if (aLoc) {
+      const target = area.querySelector(`.hospital-card[data-loc-name="${CSS.escape(aLoc)}"] .hospital-body`);
+      if (target) { target.appendChild(el); updateCard(el, aLoc); return; }
+    }
+    pool.appendChild(el);
+  });
+
+  new Sortable(pool, {
+    group: 'students', animation: 150, ghostClass: 'sortable-ghost',
+    onStart: evt => selectStudent(evt.item, evt.item.dataset.name),
+    onEnd: () => deselectStudent(),
+    onAdd: evt => handlePoolDrop(evt.item)
+  });
+  updateCount();
+}
+
+function handleDrop(el, locName) { appData.assignments[el.dataset.name] = locName; updateCard(el, locName); updateCount(); deselectStudent(); }
+function handlePoolDrop(el) { delete appData.assignments[el.dataset.name]; resetCard(el); updateCount(); }
+function onPoolClick(e) { const c = e.target.closest('.student-card'); if (!c) return; const n = c.dataset.name; if (selectedStudentName === n) deselectStudent(); else selectStudent(c, n); e.stopPropagation(); }
+function onHospitalAreaClick(e) { const c = e.target.closest('.student-card'); if (c) { const n = c.dataset.name; if (selectedStudentName === n) deselectStudent(); else selectStudent(c, n); e.stopPropagation(); } else deselectStudent(e); }
+
+function selectStudent(c, name) {
+  document.querySelectorAll('.student-card.selected').forEach(e => e.classList.remove('selected'));
+  selectedStudentName = name;
+  c.classList.add('selected');
+  document.querySelectorAll('.hospital-card').forEach(h => {
+    const lname = h.dataset.locName;
+    const info = appData.timeMap[name + '_' + lname];
+    const ov = h.querySelector('.time-overlay');
+    ov.classList.add('active');
+    if (!info || info.status !== 'OK') {
+      ov.innerHTML = `<span class="text-muted">${info ? info.text : "未計算"}</span>`;
+    } else {
+      const cls = info.total < 60 ? 'time-val-safe' : info.total < 90 ? 'time-val-warn' : 'time-val-danger';
+      const sEsc = name.replace(/'/g, "\\'");
+      const lEsc = lname.replace(/'/g, "\\'");
+      ov.innerHTML = `
+        <div class="overlay-time ${cls}">${formatDuration(info.total)}</div>
+        <div class="overlay-detail">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div>
+        <div class="overlay-btns">
+          <button class="btn btn-outline-secondary btn-sm py-0" onclick="ovDetail('${sEsc}','${lEsc}',event)">詳細</button>
+          <button class="btn btn-primary btn-sm py-0" onclick="ovAssign('${sEsc}','${lEsc}',event)">配置</button>
+        </div>`;
+    }
+  });
+}
+
+function deselectStudent(e) {
+  if (e && (e.target.closest('.student-card') || e.target.closest('button'))) return;
+  selectedStudentName = null;
+  document.querySelectorAll('.student-card.selected').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.time-overlay.active').forEach(o => o.classList.remove('active'));
+}
+function ovDetail(s, l, e) { e.stopPropagation(); openDetail(s, l); }
+function ovAssign(s, l, e) {
+  e.stopPropagation();
+  const c = document.querySelector(`#unassigned-list .student-card[data-name="${CSS.escape(s)}"]`);
+  const t = document.querySelector(`.hospital-card[data-loc-name="${CSS.escape(l)}"] .hospital-body`);
+  if (c && t) { t.appendChild(c); handleDrop(c, l); }
+}
+
+function createStudentCard(s) {
+  const d = document.createElement('div');
+  d.className = 'student-card'; d.dataset.name = s.name;
+  const icon = s.isPediatric ? '<span class="badge-pediatric">小児</span>' : '';
+  d.innerHTML = `<div class="student-card-inner"><span>${s.name}${icon}</span></div><span class="badge-time time-neutral">-</span>`;
+  return d;
+}
+
+function updateCard(el, loc) {
+  el.classList.add('placed');
+  const s = el.dataset.name; const info = appData.timeMap[s + '_' + loc];
+  let h = `<div class="placed-header"><span class="placed-name">${s}</span><button class="placed-btn-analyze">詳細</button></div>`;
+  if (info && info.status === 'OK') {
+    const cls = info.total < 60 ? 'text-success' : info.total < 90 ? 'text-warning' : 'text-danger';
+    h += `<div class="placed-details"><div class="placed-time-main ${cls}">${formatDuration(info.total)}</div><div class="placed-time-sub">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
+  } else {
+    h += `<div class="text-end text-danger small">${info ? info.text : "未計算"}</div>`;
+  }
+  el.innerHTML = h;
+  el.querySelector('button').onclick = e => { e.stopPropagation(); openDetail(s, loc); };
+}
+
+function resetCard(el) {
+  el.classList.remove('placed');
+  const n = el.dataset.name;
+  el.innerHTML = `<div class="student-card-inner"><span>${n}</span></div><span class="badge-time time-neutral">-</span>`;
+}
+
+function updateCount() {
+  const type = document.querySelector('input[name="btnradio"]:checked').value;
+  const tStu = appData.students.filter(s => checkStudentType(s, type));
+  const placed = tStu.filter(s => appData.assignments[s.name]).length;
+  const tLoc = appData.locations.filter(l => checkType(l, type));
+  const locCounts = {};
+  Object.values(appData.assignments).forEach(l => { locCounts[l] = (locCounts[l] || 0) + 1; });
+  const usedL = tLoc.filter(l => locCounts[l.name] > 0).length;
+  const stats = document.getElementById('match-stats');
+  if (stats) stats.innerHTML = `<span class="me-3"><i class="bi bi-people-fill"></i> 学生: <b>${placed}</b>/${tStu.length} <span class="text-danger fw-bold">(残${tStu.length - placed})</span></span><span><i class="bi bi-hospital-fill"></i> 実習地: <b>${usedL}</b>/${tLoc.length} <span class="text-success fw-bold">(空${tLoc.length - usedL})</span></span>`;
+  const ph = document.querySelector('.pool-header-top');
+  if (ph) ph.innerHTML = `未配置リスト <span class="badge bg-secondary rounded-pill ms-1">${tStu.length - placed}</span>`;
+}
+
+// ===== 配置保存・読込 =====
+function saveStateUI() {
+  if (Object.keys(appData.assignments).length === 0) { alert("配置なし"); return; }
+  showLoading("保存中...");
+  const data = {};
+  Object.entries(appData.assignments).forEach(([s, l]) => { data[toFbKey(s)] = l; });
+  db.ref('/assignments').set(data)
+    .then(() => { hideLoading(); showMessage("配置を保存しました。", "保存完了"); })
+    .catch(e => { hideLoading(); alert(e.message); });
+}
+
+function loadStateUI() {
+  if (!confirm("保存済みの配置を読み込みますか？")) return;
+  showLoading("読込中...");
+  db.ref('/assignments').once('value').then(snap => {
+    appData.assignments = {};
+    Object.entries(snap.val() || {}).forEach(([k, v]) => { appData.assignments[fromFbKey(k)] = v; });
+    hideLoading(); renderBoard(); showMessage("配置を読み込みました。", "読込完了");
+  }).catch(e => { hideLoading(); alert(e.message); });
+}
+
+// ===== 確定結果を出力 =====
+function saveMatchingResult() {
+  const type = document.querySelector('input[name="btnradio"]:checked').value;
+  const res = [];
+  document.querySelectorAll('.student-card.placed').forEach(c => {
+    const s = c.dataset.name;
+    const l = c.parentElement.parentElement.dataset.locName;
+    const info = appData.timeMap[s + '_' + l];
+    res.push({ studentName: s, locationName: l, time: info ? info.total : 'err', status: '済', type, timestamp: new Date().toLocaleString('ja-JP') });
+  });
+  if (res.length === 0) { alert("配置された学生がいません"); return; }
+  showLoading("保存中...");
+  const updates = {};
+  const ts = Date.now();
+  res.forEach((r, i) => { updates[`/matchingResults/r${ts}_${i}`] = r; });
+  db.ref().update(updates)
+    .then(() => { hideLoading(); showMessage(`${res.length}件の結果を保存しました。`, "確定完了"); loadData(); })
+    .catch(e => { hideLoading(); alert(e.message); });
+}
+
+// ===== 所要時間計算 =====
+async function recalc(s, l) {
+  if (isCalculating) return;
+  const cells = document.querySelectorAll(`.cell-calc[data-student="${CSS.escape(s)}"][data-location="${CSS.escape(l)}"]`);
+  cells.forEach(c => { c.className = 'cell-calc cell-loading'; c.innerText = "計算中..."; });
+  const st = appData.students.find(x => x.name === s);
+  const lo = appData.locations.find(x => x.name === l);
+  if (!st || !lo) return;
+  try {
+    const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: lo.address, time: lo.time });
+    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly };
+    cells.forEach(c => { c.className = 'cell-calc ' + (r.success ? 'cell-ok' : 'cell-error'); c.innerHTML = getCellHtml(info); });
+    appData.timeMap[s + '_' + l] = info;
+    db.ref('/timeMap/' + tmKey(s, l)).set(r.success ? r.valStr : r.text);
+  } catch(e) {
+    cells.forEach(c => { c.className = 'cell-calc cell-error'; c.innerText = "エラー"; });
+  }
+}
+
+function buildMatrixColumns() {
+  const cols = []; const seen = new Set();
+  ['eval', 'comp', 'obs'].forEach(t => {
+    appData.locations.forEach(l => {
+      const ok = t === 'eval' ? l.isEvaluation : t === 'comp' ? l.isComprehensive : l.isObservation;
+      const key = t + '_' + l.name;
+      if (ok && !seen.has(key)) { seen.add(key); cols.push({ name: l.name, type: t }); }
+    });
+  });
+  return cols;
+}
+
+function syncList() {
+  showLoading("同期中...");
+  db.ref('/timeMap').once('value').then(snap => {
+    appData.timeMap = {};
+    Object.entries(snap.val() || {}).forEach(([k, v]) => {
+      const sep = k.indexOf('__');
+      if (sep === -1) return;
+      const mapKey = fromFbKey(k.substring(0, sep)) + '_' + fromFbKey(k.substring(sep + 2));
+      appData.timeMap[mapKey] = parseTimeVal(v);
+    });
+    hideLoading(); resetSyncButton(); renderAll();
+  }).catch(e => { hideLoading(); alert("エラー: " + e.message); });
+}
+
+function startBatchCalc(mode, targetStudentName) {
+  if (isCalculating) return;
+  if (mode === 'all' && !confirm("既存の計算結果をすべてリセットして再計算しますか？")) return;
+  if (mode === 'student' && !confirm(`${targetStudentName} の計算をやり直しますか？`)) return;
+  isCalculating = true;
+  document.getElementById('btn-stop-calc').disabled = false;
+  calcQueue = []; totalCalcTarget = 0;
+  const bar = document.getElementById('calc-progress-bar');
+  bar.className = "progress-bar progress-bar-striped progress-bar-animated"; bar.style.width = "0%";
+  document.getElementById('calc-status-text').className = "";
+  const matrixCols = buildMatrixColumns();
+
+  appData.students.forEach(s => {
+    if (mode === 'student' && s.name !== targetStudentName) return;
+    const targets = [];
+    matrixCols.forEach(col => {
+      const isT = col.type === 'obs' ? s.isObservation : col.type === 'eval' ? s.isEvaluation : s.isComprehensive;
+      if (!isT) return;
+      const loc = appData.locations.find(l => l.name === col.name);
+      if (!loc) return;
+      if (mode === 'missing') {
+        const inf = appData.timeMap[s.name + '_' + loc.name];
+        if (inf && (inf.status === 'OK' || inf.text === '経路なし')) return;
+      }
+      if (!targets.find(t => t.lName === loc.name)) {
+        targets.push({ lName: loc.name, lAddr: loc.address, time: loc.time });
+        document.querySelectorAll(`.cell-calc[data-student="${CSS.escape(s.name)}"][data-location="${CSS.escape(loc.name)}"]`)
+          .forEach(c => { c.innerText = "待"; c.className = 'cell-calc cell-empty'; });
+      }
+    });
+    totalCalcTarget += targets.length;
+    targets.forEach(t => calcQueue.push({ sName: s.name, target: t }));
+  });
+
+  finishedCalcCount = 0;
+  document.getElementById('calc-status-text').innerText = "計算中...";
+  if (totalCalcTarget === 0) { alert("計算対象がありません"); stopBatchCalc(); return; }
+  processQueueClient();
+}
+
+async function processQueueClient() {
+  if (!isCalculating || calcQueue.length === 0) {
+    stopBatchCalc(true); showMessage("すべての計算が完了しました。", "計算完了"); return;
+  }
+  const item = calcQueue.shift();
+  const st = appData.students.find(x => x.name === item.sName);
+  document.getElementById('calc-status-text').innerText = `計算中: ${item.sName} → ${item.target.lName}`;
+  const cells = document.querySelectorAll(`.cell-calc[data-student="${CSS.escape(item.sName)}"][data-location="${CSS.escape(item.target.lName)}"]`);
+  cells.forEach(c => { c.innerText = "…"; c.className = 'cell-calc cell-loading'; });
+  try {
+    const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: item.target.lAddr, time: item.target.time });
+    const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly };
+    cells.forEach(c => { c.innerHTML = getCellHtml(info); c.className = 'cell-calc ' + (r.success ? 'cell-ok' : 'cell-error'); });
+    appData.timeMap[item.sName + '_' + item.target.lName] = info;
+    db.ref('/timeMap/' + tmKey(item.sName, item.target.lName)).set(r.success ? r.valStr : r.text);
+  } catch(e) {
+    cells.forEach(c => { c.innerText = "Err"; c.className = 'cell-calc cell-error'; });
+  }
+  finishedCalcCount++;
+  const bar = document.getElementById('calc-progress-bar');
+  bar.style.width = Math.round((finishedCalcCount / totalCalcTarget) * 100) + "%";
+  document.getElementById('calc-progress-text').innerText = `${finishedCalcCount} / ${totalCalcTarget}`;
+  setTimeout(processQueueClient, 300);
+}
+
+function stopBatchCalc(isFinished = false) {
+  isCalculating = false; document.getElementById('btn-stop-calc').disabled = true;
+  const bar = document.getElementById('calc-progress-bar');
+  bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+  if (isFinished) { bar.className = "progress-bar bg-success"; bar.style.width = "100%"; document.getElementById('calc-status-text').innerText = "計算終了"; document.getElementById('calc-status-text').className = "text-success fw-bold"; }
+  else { document.getElementById('calc-status-text').innerText = "待機中"; document.getElementById('calc-status-text').className = ""; }
+}
+
+// ===== マトリクス表示 =====
+function renderMatrix() {
+  const t = document.getElementById('matrix-table');
+  const cols = buildMatrixColumns();
+  if (appData.students.length === 0 || cols.length === 0) {
+    t.querySelector('thead').innerHTML = '';
+    t.querySelector('tbody').innerHTML = '<tr><td class="p-3 text-muted">データがありません。「リストから読込」を押してください。</td></tr>';
+    return;
+  }
+  const typeClass = { eval: 'cell-eval', comp: 'cell-comp', obs: 'cell-obs' };
+  t.querySelector('thead').innerHTML = '<tr><th style="position:sticky;top:0;left:0;z-index:6;background:#f8f9fa;width:140px">学生 / 施設</th>' +
+    cols.map(c => `<th class="${typeClass[c.type] || ''}"><div class="header-loc">${c.name}</div></th>`).join('') + '</tr>';
+
+  let body = "";
+  appData.students.forEach(s => {
+    const sEsc = s.name.replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+    body += `<tr><th style="cursor:pointer" onclick="startBatchCalc('student','${sEsc}')" title="この学生のみ再計算">👤 ${s.name}</th>`;
+    cols.forEach(col => {
+      const isT = col.type === 'obs' ? s.isObservation : col.type === 'eval' ? s.isEvaluation : s.isComprehensive;
+      if (!isT) { body += `<td class="cell-calc cell-disabled">×</td>`; return; }
+      const inf = appData.timeMap[s.name + '_' + col.name];
+      const cls = !inf ? 'cell-empty' : inf.status === 'OK' ? 'cell-ok' : 'cell-error';
+      const lEsc = col.name.replace(/'/g, "\\'").replace(/\\/g, "\\\\");
+      body += `<td class="cell-calc ${cls}" data-student="${s.name}" data-location="${col.name}" onclick="recalc('${sEsc}','${lEsc}')">${getCellHtml(inf)}</td>`;
+    });
+    body += '</tr>';
+  });
+  t.querySelector('tbody').innerHTML = body;
+}
+
+function getCellHtml(info) {
+  if (!info) return "未";
+  if (info.status !== 'OK') return info.text || "エラー";
+  if (info.isWalkingOnly) return `<div class="text-primary fw-bold">徒歩${info.total}分</div>`;
+  const total = parseInt(info.total);
+  const cls = total < 60 ? "text-success" : total > 100 ? "text-orange" : "";
+  return `<div class="${cls}"><div class="fw-bold">${formatDuration(total)}</div><div style="font-size:0.75em">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
+}
+
+// ===== 詳細ルートモーダル =====
+async function openDetail(sName, lName) {
+  const st = appData.students.find(x => x.name === sName);
+  const lo = appData.locations.find(x => x.name === lName);
+  const m = new bootstrap.Modal(document.getElementById('analysisModal'));
+  const resDiv = document.getElementById('analysis-result');
+  resDiv.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">ルート検索中...</div></div>';
+  m.show();
+  try {
+    const res = await callGasApi('getDeepRouteAnalysis', { origin: st.address, dest: lo.address, time: lo.time });
+    const renderRoute = (route, title, colorClass) => {
+      if (!route || !route.found) return `<div class="alert alert-secondary mb-3">${title}: ルートが見つかりませんでした</div>`;
+      let html = `<div class="card mb-3"><div class="card-header ${colorClass} text-white d-flex justify-content-between align-items-center"><span>${title}</span><span class="badge bg-light text-dark">${route.depart} - ${route.arrive} (${route.duration})</span></div><div class="card-body bg-light"><div class="timeline">`;
+      route.steps.forEach(step => { html += `<div class="timeline-item"><div class="timeline-content">${step}</div></div>`; });
+      return html + `</div></div></div>`;
+    };
+    resDiv.innerHTML = renderRoute(res.primary, "最適ルート", "bg-success") + renderRoute(res.early, "1本前 (余裕あり)", "bg-primary");
+  } catch(e) {
+    resDiv.innerHTML = `<div class="alert alert-danger">詳細ルートの取得に失敗しました: ${e.message}</div>`;
+  }
+}
+
+// ===== スプレッドシートUI =====
+function createExcelRowHTML(type, row) {
+  const cols = type === 'student' ? 9 : 5;
+  return '<tr>' + Array(cols).fill(0).map((_, i) => {
+    let val = row ? (row[i] !== undefined ? row[i] : '') : '';
+    let xClass = '', ro = '', click = '', style = '';
+    if (type === 'student' && i === 0) {
+      xClass = 'toggle-cell'; ro = 'readonly'; click = 'onclick="toggleVal(this)"';
+      if (!val) val = '3年';
+    }
+    if (type === 'student' && i === 4) xClass += ' cell-eval';
+    if (type === 'student' && i === 5) xClass += ' cell-comp';
+    if (type === 'student' && i === 6) xClass += ' cell-obs';
+    if (type === 'student' && (i === 3 || (i >= 4 && i <= 6))) {
+      const isT = String(val).toUpperCase() === 'TRUE' || val === '1' || val === '○' || val === true;
+      val = isT ? '○' : '×';
+      xClass += ' toggle-cell ' + (isT ? 'val-true' : 'val-false');
+      ro = 'readonly'; click = 'onclick="toggleVal(this)"';
+    } else if (type === 'location' && i === 0) {
+      xClass += ' type-selector-cell'; ro = 'readonly'; click = 'onclick="rotateType(this)"';
+      const colors = getTypeColors(String(val));
+      if (colors.length === 1) style = `background:${colors[0]};`;
+      else if (colors.length > 1) style = `background:linear-gradient(to right,${colors.join(',')});`;
+    } else if (type === 'location' && i === 3) {
+      const isT = String(val).toUpperCase() === 'TRUE' || val === '1' || val === '○' || val === true;
+      val = isT ? '○' : '×';
+      xClass += ' toggle-cell ' + (isT ? 'val-true' : 'val-false');
+      ro = 'readonly'; click = 'onclick="toggleVal(this)"';
+    }
+    return `<td><input class="excel-cell${xClass ? ' ' + xClass.trim() : ''}" value="${String(val).replace(/"/g,'&quot;')}" ${ro} ${click} style="${style}" oninput="triggerAutoSave('${type}')"></td>`;
+  }).join('') + '</tr>';
+}
+
+function initExcel(type, data, minRows) {
+  const tbody = document.getElementById(type + '-excel').querySelector('tbody');
+  let html = data.map(row => createExcelRowHTML(type, row)).join('');
+  for (let i = data.length; i < minRows; i++) html += createExcelRowHTML(type, null);
+  tbody.innerHTML = html;
+  tbody.addEventListener('paste', e => handlePaste(e, type));
+  tbody.addEventListener('mousedown', handleCellMouseDown);
+  tbody.addEventListener('mouseover', handleCellMouseOver);
+}
+
+document.addEventListener('mouseup', () => { selection.active = false; });
+document.addEventListener('keydown', handleGlobalKey);
+
+function handleCellMouseDown(e) {
+  const cell = e.target.closest('.excel-cell'); if (!cell) return;
+  const td = cell.parentElement, tr = td.parentElement, table = tr.parentElement.parentElement;
+  selection.active = true; selection.tableId = table.id;
+  selection.start = { r: tr.rowIndex, c: td.cellIndex };
+  selection.end = { r: tr.rowIndex, c: td.cellIndex };
+  updateSelectionVisual();
+}
+function handleCellMouseOver(e) {
+  if (!selection.active) return;
+  const cell = e.target.closest('.excel-cell'); if (!cell) return;
+  const td = cell.parentElement, tr = td.parentElement, table = tr.parentElement.parentElement;
+  if (table.id !== selection.tableId) return;
+  selection.end = { r: tr.rowIndex, c: td.cellIndex };
+  updateSelectionVisual();
+}
+function updateSelectionVisual() {
+  if (!selection.tableId) return;
+  const table = document.getElementById(selection.tableId);
+  table.querySelectorAll('.excel-cell.selected').forEach(el => el.classList.remove('selected'));
+  const r1 = Math.min(selection.start.r, selection.end.r), r2 = Math.max(selection.start.r, selection.end.r);
+  const c1 = Math.min(selection.start.c, selection.end.c), c2 = Math.max(selection.start.c, selection.end.c);
+  for (let i = r1; i <= r2; i++) {
+    const row = table.rows[i]; if (!row) continue;
+    for (let j = c1; j <= c2; j++) { const inp = row.cells[j]?.querySelector('input'); if (inp) inp.classList.add('selected'); }
+  }
+}
+function handleGlobalKey(e) {
+  if (!selection.tableId || !document.querySelector(`#${selection.tableId} .selected`)) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (appData.isLocked) return;
+    document.querySelectorAll(`#${selection.tableId} .selected`).forEach(input => {
+      if (selection.tableId === 'student-excel' && input.parentElement.cellIndex === 0) { input.value = '3年'; }
+      else { input.value = input.classList.contains('toggle-cell') ? '×' : ''; input.className = input.className.replace('val-true', 'val-false'); }
+    });
+    triggerAutoSave(selection.tableId === 'student-excel' ? 'student' : 'location');
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    e.preventDefault();
+    const table = document.getElementById(selection.tableId);
+    const r1 = Math.min(selection.start.r, selection.end.r), r2 = Math.max(selection.start.r, selection.end.r);
+    const c1 = Math.min(selection.start.c, selection.end.c), c2 = Math.max(selection.start.c, selection.end.c);
+    let txt = '';
+    for (let i = r1; i <= r2; i++) {
+      const cols = []; for (let j = c1; j <= c2; j++) { cols.push(table.rows[i]?.cells[j]?.querySelector('input')?.value || ''); }
+      txt += cols.join('\t') + '\n';
+    }
+    navigator.clipboard.writeText(txt);
+  }
+}
+function handlePaste(e, type) {
+  if (appData.isLocked) return; e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  const active = document.activeElement; if (!active.classList.contains('excel-cell')) return;
+  const tr = active.parentElement.parentElement;
+  const startR = tr.rowIndex - 1, startC = active.parentElement.cellIndex;
+  const table = document.getElementById(type + '-excel');
+  text.trim().split(/\r\n|\n|\r/).forEach((rt, ro) => {
+    const row = table.rows[startR + ro + 1]; if (!row) return;
+    rt.split('\t').forEach((v, co) => {
+      const input = row.cells[startC + co]?.querySelector('input'); if (!input) return;
+      const val = v.trim();
+      if (input.classList.contains('toggle-cell')) {
+        if (type === 'student' && input.parentElement.cellIndex === 0) { input.value = (val === '2年' || val === '3年') ? val : '3年'; }
+        else { const isT = val === 'TRUE' || val === '1' || val === '○'; input.value = isT ? '○' : '×'; input.className = `excel-cell toggle-cell ${isT ? 'val-true' : 'val-false'}`; }
+      } else { input.value = val; if (type === 'location' && input.parentElement.cellIndex === 0) updateTypeColor(input); }
+    });
+  });
+  triggerAutoSave(type);
+}
+function toggleVal(el) {
+  if (appData.isLocked) return;
+  const ci = el.closest('td').cellIndex, type = el.closest('table').id.replace('-excel', '');
+  if (type === 'student' && ci === 0) { el.value = el.value === '2年' ? '3年' : '2年'; }
+  else { const isO = el.value === '○'; el.value = isO ? '×' : '○'; el.classList.remove('val-true', 'val-false'); el.classList.add(isO ? 'val-false' : 'val-true'); }
+  triggerAutoSave(type);
+}
+function rotateType(el) {
+  if (appData.isLocked) return;
+  const next = { '評価': '総合', '総合': '見学', '見学': '評価' };
+  el.value = next[el.value] || '評価'; updateTypeColor(el); triggerAutoSave('location');
+}
+function getTypeColors(val) {
+  const c = [];
+  if (val.includes('見学')) c.push('#d1e7dd');
+  if (val.includes('評価')) c.push('#fff3cd');
+  if (val.includes('総合')) c.push('#cff4fc');
+  return c;
+}
+function updateTypeColor(el) {
+  const colors = getTypeColors(el.value);
+  el.style.background = colors.length === 0 ? '' : colors.length === 1 ? colors[0] : `linear-gradient(to right,${colors.join(',')})`;
+}
+function triggerAutoSave(type) {
+  if (appData.isLocked) return;
+  document.getElementById('statusText').innerHTML = '<i class="bi bi-pencil-square"></i> 保存待機中...';
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => saveList(type, true), 2000);
+}
+function markSyncNeeded() {
+  const btn = document.getElementById('btn-sync-list');
+  if (btn && !btn.innerText.includes('更新が必要')) {
+    btn.classList.replace('btn-secondary', 'btn-danger');
+    btn.style.border = "2px dashed #ffc107";
+    btn.innerHTML = '<i class="bi bi-exclamation-circle"></i> リストから読込 (更新が必要)';
+  }
+}
+function resetSyncButton() {
+  const btn = document.getElementById('btn-sync-list');
+  if (btn) { btn.className = 'btn btn-secondary btn-sm'; btn.innerHTML = '<i class="bi bi-table"></i> リストから読込'; btn.style.border = ''; }
+}
+
+function saveList(type, isAuto = false) {
+  if (appData.isLocked) { alert("リストはロックされています。解除してから保存してください。"); return; }
+  const table = document.getElementById(type + '-excel');
+  const data = [];
+  for (let i = 1; i < table.rows.length; i++) {
+    const row = [], cells = table.rows[i].cells; let hasVal = false;
+    for (let j = 0; j < cells.length; j++) {
+      let val = cells[j].querySelector('input').value;
+      if (type === 'student' && (j === 3 || (j >= 4 && j <= 6))) val = val === '○';
+      if (type === 'location' && j === 3) val = val === '○';
+      row.push(val);
+      if (val && val !== false && val !== '×') hasVal = true;
+    }
+    if (hasVal) data.push(row);
+  }
+  if (isAuto) { document.getElementById('statusText').innerHTML = '<div class="spinner-border spinner-border-sm"></div> 保存中...'; }
+  else showLoading("保存中...");
+  const p = type === 'student' ? fbSaveStudents(data) : fbSaveLocations(data);
+  p.then(() => {
+    if (isAuto) { document.getElementById('statusText').innerHTML = '<i class="bi bi-check"></i> 保存完了'; setTimeout(updateLockUI, 2000); markSyncNeeded(); }
+    else { hideLoading(); showMessage("保存しました。", "保存完了"); loadData(); markSyncNeeded(); }
+  }).catch(e => { if (!isAuto) hideLoading(); alert("保存エラー: " + e.message); });
+}
+
+function resetList(type) {
+  if (appData.isLocked) return;
+  if (!confirm("リセットしますか？")) return;
+  db.ref('/' + (type === 'student' ? 'students' : 'locations')).remove()
+    .then(() => { showMessage("リセットしました。", "完了"); loadData(); })
+    .catch(e => alert(e.message));
+}
+
+// ===== 印刷 =====
+function renderPrintView() {
+  let h = '<h4>マッチング結果一覧</h4><table class="table table-bordered table-sm"><thead><tr><th>実習地</th><th>学生名</th><th>時間</th><th>詳細</th></tr></thead><tbody>';
+  document.querySelectorAll('.hospital-card').forEach(card => {
+    const locName = card.dataset.locName;
+    card.querySelectorAll('.student-card.placed').forEach(s => {
+      const sName = s.dataset.name, info = appData.timeMap[sName + '_' + locName];
+      h += `<tr><td>${locName}</td><td>${sName}</td><td>${info ? formatDuration(info.total) : '-'}</td><td class="small text-muted">駅歩${info ? info.firstWalk : '-'}分</td></tr>`;
+    });
+  });
+  document.getElementById('print-content').innerHTML = h + '</tbody></table>';
+}
+</script>
+</body>
+</html>
