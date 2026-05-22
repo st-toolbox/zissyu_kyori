@@ -1005,7 +1005,6 @@ function renderGmRoute(route, title, headerCls) {
     } else if (item.type === 'transit') {
       const isShin = item.isShin;
       const isBus = item.isBus;
-      const iconEmoji = isShin ? '🚅' : isBus ? '🚌' : '🚋';
       const iconCls = isShin ? 'shin' : isBus ? 'bus' : 'rail';
       const badgeCls = isShin ? 'shin' : isBus ? 'bus' : '';
       const lineHtml = item.line ? `<span class="gm-line-badge ${badgeCls}">${item.line}</span>` : '';
@@ -1017,7 +1016,6 @@ function renderGmRoute(route, title, headerCls) {
         <div class="gm-col-line ${isShin ? 'shin-seg' : ''}"></div>
         <div class="gm-col-seg">
           <div class="gm-seg-box ${isShin ? 'shin-box' : ''}">
-            <div class="gm-seg-icon ${iconCls}">${iconEmoji}</div>
             <div class="gm-seg-content">
               <div class="gm-seg-main">${lineHtml}${vehicleHtml}${shinTag}</div>
               ${dirHtml}
