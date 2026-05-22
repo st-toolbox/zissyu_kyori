@@ -106,7 +106,10 @@
 
 <div class="app-status-bar" id="statusBar">
   <span id="statusText"><i class="bi bi-pencil-square"></i> リスト編集中</span>
-  <span id="user-badge" class="ms-3 badge bg-secondary" style="font-size:0.7rem;font-weight:normal"></span>
+  <div class="ms-auto d-flex align-items-center gap-2" style="position:absolute;right:12px">
+    <span id="user-badge" class="badge bg-secondary" style="font-size:0.7rem;font-weight:normal"></span>
+    <button class="btn btn-outline-light btn-sm py-0" style="font-size:0.75rem" onclick="signOut()"><i class="bi bi-box-arrow-right"></i> ログアウト</button>
+  </div>
 </div>
 
 <ul class="nav nav-tabs px-3 pt-2 bg-white border-bottom-0 no-print" id="myTab" role="tablist">
@@ -264,7 +267,7 @@ const firebaseConfig = {
   projectId: "zissyu-kyori",
   storageBucket: "zissyu-kyori.firebasestorage.app",
   messagingSenderId: "748477721511",
-  appId: "1:748477821511:web:943fc09d5405d640586482"
+  appId: "1:748477721511:web:943fc09d5405d640586482"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -284,15 +287,20 @@ let autoSaveTimer = null;
 
 // ===== Firebase キーエンコード =====
 // Firebase キーに使えない文字: . # $ / [ ]
+// % を先にエンコードしてから各禁止文字を %XX 形式に変換（日本語テキストと衝突しない）
 function toFbKey(str) {
   return String(str)
-    .replace(/\./g, '・').replace(/#/g, '＃').replace(/\$/g, '＄')
-    .replace(/\[/g, '［').replace(/\]/g, '］').replace(/\//g, '／');
+    .replace(/%/g, '%25')
+    .replace(/\./g, '%2E')
+    .replace(/#/g, '%23')
+    .replace(/\$/g, '%24')
+    .replace(/\//g, '%2F')
+    .replace(/\[/g, '%5B')
+    .replace(/\]/g, '%5D');
 }
 function fromFbKey(str) {
-  return String(str)
-    .replace(/・/g, '.').replace(/＃/g, '#').replace(/＄/g, '$')
-    .replace(/［/g, '[').replace(/］/g, ']').replace(/／/g, '/');
+  try { return decodeURIComponent(String(str)); }
+  catch(e) { return String(str); }
 }
 function tmKey(s, l) { return toFbKey(s) + '__' + toFbKey(l); }
 
@@ -321,6 +329,11 @@ function signIn() {
   auth.signInWithPopup(provider).catch(e => {
     document.getElementById('login-error').innerText = 'ログインエラー: ' + e.message;
   });
+}
+
+function signOut() {
+  if (!confirm('ログアウトしますか？')) return;
+  auth.signOut();
 }
 
 // ===== データ読込 =====
@@ -454,7 +467,6 @@ function fbSaveLocations(rows) {
 function updateLockUI() {
   const bar = document.getElementById('statusBar');
   const text = document.getElementById('statusText');
-  const badge = document.getElementById('user-badge');
   const btns = document.querySelectorAll('.btn-lock-action');
   const containers = document.querySelectorAll('.excel-container');
   if (appData.isLocked) {
@@ -589,9 +601,19 @@ function deselectStudent(e) {
 function ovDetail(s, l, e) { e.stopPropagation(); openDetail(s, l); }
 function ovAssign(s, l, e) {
   e.stopPropagation();
-  const c = document.querySelector(`#unassigned-list .student-card[data-name="${CSS.escape(s)}"]`);
+  // 未配置プールと配置済みの施設カードの両方から学生カードを探す
+  const c = document.querySelector(`.student-card[data-name="${CSS.escape(s)}"]`);
   const t = document.querySelector(`.hospital-card[data-loc-name="${CSS.escape(l)}"] .hospital-body`);
-  if (c && t) { t.appendChild(c); handleDrop(c, l); }
+  if (c && t) {
+    const prevLoc = appData.assignments[s];
+    t.appendChild(c);
+    handleDrop(c, l);
+    // 元の施設カードの表示を更新
+    if (prevLoc && prevLoc !== l) {
+      const prevCard = document.querySelector(`.hospital-card[data-loc-name="${CSS.escape(prevLoc)}"]`);
+      if (prevCard) prevCard.querySelector('.hospital-body').querySelectorAll('.student-card').forEach(sc => updateCard(sc, prevLoc));
+    }
+  }
 }
 
 function createStudentCard(s) {
@@ -684,7 +706,10 @@ async function recalc(s, l) {
   cells.forEach(c => { c.className = 'cell-calc cell-loading'; c.innerText = "計算中..."; });
   const st = appData.students.find(x => x.name === s);
   const lo = appData.locations.find(x => x.name === l);
-  if (!st || !lo) return;
+  if (!st || !lo) {
+    cells.forEach(c => { c.className = 'cell-calc cell-error'; c.innerText = "エラー"; });
+    return;
+  }
   try {
     const r = await callGasApi('calculateSingleRoute', { origin: st.address, dest: lo.address, time: lo.time });
     const info = { status: r.success ? 'OK' : 'ERROR', text: r.success ? formatDuration(r.minutes) : r.text, total: r.minutes, firstWalk: r.firstWalk || 0, totalWalk: r.totalWalk || 0, isWalkingOnly: r.isWalkingOnly };
@@ -840,8 +865,12 @@ async function openDetail(sName, lName) {
   const lo = appData.locations.find(x => x.name === lName);
   const m = new bootstrap.Modal(document.getElementById('analysisModal'));
   const resDiv = document.getElementById('analysis-result');
-  resDiv.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">ルート検索中...</div></div>';
   m.show();
+  if (!st || !lo) {
+    resDiv.innerHTML = `<div class="alert alert-danger">学生または施設のデータが見つかりません。</div>`;
+    return;
+  }
+  resDiv.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">ルート検索中...</div></div>';
   try {
     const res = await callGasApi('getDeepRouteAnalysis', { origin: st.address, dest: lo.address, time: lo.time });
     const renderRoute = (route, title, colorClass) => {
