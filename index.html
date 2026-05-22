@@ -595,7 +595,7 @@ function selectStudent(c, name) {
       const cls = info.total < 60 ? 'time-val-safe' : info.total < 90 ? 'time-val-warn' : 'time-val-danger';
       const sEsc = name.replace(/'/g, "\\'");
       const lEsc = lname.replace(/'/g, "\\'");
-      const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新</span>' : '';
+      const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新幹線</span>' : '';
       ov.innerHTML = `
         <div class="overlay-time ${cls}">${formatDuration(info.total)}${shinBadge}</div>
         <div class="overlay-detail">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div>
@@ -645,7 +645,7 @@ function updateCard(el, loc) {
   let h = `<div class="placed-header"><span class="placed-name">${s}</span><button class="placed-btn-analyze">詳細</button></div>`;
   if (info && info.status === 'OK') {
     const cls = info.total < 60 ? 'text-success' : info.total < 90 ? 'text-warning' : 'text-danger';
-    const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新</span>' : '';
+    const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新幹線</span>' : '';
     h += `<div class="placed-details"><div class="placed-time-main ${cls}">${formatDuration(info.total)}${shinBadge}</div><div class="placed-time-sub">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
   } else {
     h += `<div class="text-end text-danger small">${info ? info.text : "未計算"}</div>`;
@@ -891,7 +891,7 @@ function renderMatrix() {
 function getCellHtml(info) {
   if (!info) return "未";
   if (info.status !== 'OK') return info.text || "エラー";
-  const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新</span>' : '';
+  const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新幹線</span>' : '';
   if (info.isWalkingOnly) return `<div class="text-primary fw-bold">徒歩${info.total}分${shinBadge}</div>`;
   const total = parseInt(info.total);
   const cls = total < 60 ? "text-success" : total > 100 ? "text-orange" : "";
@@ -915,12 +915,12 @@ async function openDetail(sName, lName) {
     const renderRoute = (route, title, colorClass) => {
       if (!route || !route.found) return `<div class="alert alert-secondary mb-3">${title}: ルートが見つかりませんでした</div>`;
       const hasShin = route.steps && route.steps.some(s => s.includes('新幹線'));
-      const shinAlert = hasShin ? '<div class="alert alert-warning py-1 px-2 mb-2 small"><strong><span class="badge-shinkansen">新</span> 新幹線を含むルートです。</strong></div>' : '';
-      const titleBadge = hasShin ? ` <span class="badge-shinkansen">新</span>` : '';
+      const shinAlert = hasShin ? '<div class="alert alert-warning py-1 px-2 mb-2 small"><strong><span class="badge-shinkansen">新幹線</span> 新幹線を含むルートです。</strong></div>' : '';
+      const titleBadge = hasShin ? ` <span class="badge-shinkansen">新幹線</span>` : '';
       let html = `<div class="card mb-3"><div class="card-header ${colorClass} text-white d-flex justify-content-between align-items-center"><span>${title}${titleBadge}</span><span class="badge bg-light text-dark">${route.depart} - ${route.arrive} (${route.duration})</span></div><div class="card-body bg-light">${shinAlert}<div class="timeline">`;
       route.steps.forEach(step => {
         const isShin = step.includes('新幹線');
-        html += `<div class="timeline-item"><div class="timeline-content${isShin ? ' border-danger' : ''}">${step}${isShin ? ' <span class="badge-shinkansen">新</span>' : ''}</div></div>`;
+        html += `<div class="timeline-item"><div class="timeline-content${isShin ? ' border-danger' : ''}">${step}${isShin ? ' <span class="badge-shinkansen">新幹線</span>' : ''}</div></div>`;
       });
       return html + `</div></div></div>`;
     };
@@ -1127,7 +1127,7 @@ function renderPrintView() {
     const locName = card.dataset.locName;
     card.querySelectorAll('.student-card.placed').forEach(s => {
       const sName = s.dataset.name, info = appData.timeMap[sName + '_' + locName];
-      const shinBadge = info && info.hasShinkansen ? ' <span class="badge-shinkansen">新</span>' : '';
+      const shinBadge = info && info.hasShinkansen ? ' <span class="badge-shinkansen">新幹線</span>' : '';
       h += `<tr><td>${locName}</td><td>${sName}</td><td>${info ? formatDuration(info.total) : '-'}${shinBadge}</td><td class="small text-muted">駅歩${info ? info.firstWalk : '-'}分</td></tr>`;
     });
   });
