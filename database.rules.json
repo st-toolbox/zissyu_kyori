@@ -1,6 +1,6 @@
 {
   "rules": {
-    ".read": "auth != null && (auth.token.email.matches('.*@asahi\\.ac\\.jp') || auth.token.email.matches('.*@oky\\.asahi\\.ac\\.jp'))",
-    ".write": "auth != null && (auth.token.email.matches('.*@asahi\\.ac\\.jp') || auth.token.email.matches('.*@oky\\.asahi\\.ac\\.jp'))"
+    ".read": "auth != null && (auth.token.email.matches(/.*@asahi\\.ac\\.jp/) || auth.token.email.matches(/.*@oky\\.asahi\\.ac\\.jp/))",
+    ".write": "auth != null && (auth.token.email.matches(/.*@asahi\\.ac\\.jp/) || auth.token.email.matches(/.*@oky\\.asahi\\.ac\\.jp/))"
   }
 }
