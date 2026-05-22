@@ -894,7 +894,7 @@ function getCellHtml(info) {
   const shinBadge = info.hasShinkansen ? '<span class="badge-shinkansen">新幹線</span>' : '';
   if (info.isWalkingOnly) return `<div class="text-primary fw-bold">徒歩${info.total}分${shinBadge}</div>`;
   const total = parseInt(info.total);
-  const cls = total < 60 ? "text-success" : total > 100 ? "text-orange" : "";
+  const cls = info.hasShinkansen ? "text-danger" : total < 60 ? "text-success" : total > 100 ? "text-orange" : "";
   return `<div class="${cls}"><div class="fw-bold">${formatDuration(total)}${shinBadge}</div><div style="font-size:0.75em">(駅歩${info.firstWalk}分 / 計${info.totalWalk}分)</div></div>`;
 }
 
