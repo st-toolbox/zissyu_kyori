@@ -94,12 +94,11 @@
     .gm-seg-box { background: #f1f3f4; border-radius: 8px; padding: 7px 12px; display: flex; align-items: center; gap: 10px; }
     .gm-seg-box.walk-box { background: transparent; padding: 4px 0 4px 4px; }
     .gm-seg-box.shin-box { background: #fff5f5; border-left: 3px solid #dc3545; padding-left: 9px; }
-    .gm-seg-icon { line-height: 0; min-width: 24px; text-align: center; color: #5f6368; display: flex; align-items: center; justify-content: center; }
-    .gm-seg-icon svg { display: block; }
-    .gm-seg-icon.walk { color: #5f6368; }
-    .gm-seg-icon.bus { color: #137333; }
-    .gm-seg-icon.rail { color: #1a73e8; }
-    .gm-seg-icon.shin { color: #dc3545; }
+    .gm-icon-badge { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; font-size: 19px; line-height: 1; flex-shrink: 0; }
+    .gm-icon-badge.walk { background: #f1f3f4; }
+    .gm-icon-badge.rail { background: #e8f0fe; }
+    .gm-icon-badge.bus { background: #e6f4ea; }
+    .gm-icon-badge.shin { background: #fce8e6; }
     .gm-seg-content { flex: 1; line-height: 1.4; }
     .gm-seg-main { font-weight: 600; color: #202124; font-size: 0.92rem; }
     .gm-seg-sub { font-size: 0.82rem; color: #5f6368; margin-top: 1px; }
@@ -935,12 +934,11 @@ function getCellHtml(info) {
 
 // ===== 詳細ルートモーダル =====
 // SVGアイコン（Material Symbols風）
-const ROUTE_ICONS = {
-  walk: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>',
-  train: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-4-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-7H6V6h5v4zm2 0V6h5v4h-5zm3.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
-  bus: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z"/></svg>',
-  shin: '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 11l-3-7H6l-3 7v9c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-9zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>'
-};
+function routeIconBadge(type) {
+  const map = { walk: ['🚶', 'walk'], train: ['🚋', 'rail'], bus: ['🚌', 'bus'], shin: ['🚄', 'shin'] };
+  const [emoji, cls] = map[type] || ['🚋', 'rail'];
+  return `<span class="gm-icon-badge ${cls}">${emoji}</span>`;
+}
 
 // 各ステップを分類: walk / stop / transit
 function parseStepItems(rawSteps) {
@@ -1004,7 +1002,7 @@ function renderGmRoute(route, title, headerCls) {
         <div class="gm-col-line walk-seg"></div>
         <div class="gm-col-seg">
           <div class="gm-seg-box walk-box">
-            <div class="gm-seg-icon walk">${ROUTE_ICONS.walk}</div>
+            ${routeIconBadge('walk')}
             <div class="gm-seg-content">
               <div class="gm-walk-text">徒歩 ${item.duration}</div>
             </div>
@@ -1014,8 +1012,8 @@ function renderGmRoute(route, title, headerCls) {
     } else if (item.type === 'transit') {
       const isShin = item.isShin;
       const isBus = item.isBus;
-      const iconEl = isShin ? ROUTE_ICONS.shin : isBus ? ROUTE_ICONS.bus : ROUTE_ICONS.train;
-      const iconCls = isShin ? 'shin' : isBus ? 'bus' : 'rail';
+      const iconType = isShin ? 'shin' : isBus ? 'bus' : 'train';
+      const iconEl = routeIconBadge(iconType);
       const badgeCls = isShin ? 'shin' : isBus ? 'bus' : '';
       const lineHtml = item.line ? `<span class="gm-line-badge ${badgeCls}">${item.line}</span>` : '';
       const vehicleHtml = item.vehicle ? `<span class="gm-vehicle">${item.vehicle}</span>` : '';
@@ -1026,7 +1024,7 @@ function renderGmRoute(route, title, headerCls) {
         <div class="gm-col-line ${isShin ? 'shin-seg' : ''}"></div>
         <div class="gm-col-seg">
           <div class="gm-seg-box ${isShin ? 'shin-box' : ''}">
-            <div class="gm-seg-icon ${iconCls}">${iconEl}</div>
+            ${iconEl}
             <div class="gm-seg-content">
               <div class="gm-seg-main">${lineHtml}${vehicleHtml}${shinTag}</div>
               ${dirHtml}
