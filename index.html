@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>実習マッチング</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <style>
     body { background-color: #f8f9fa; font-size: 0.9rem; color: #333; padding-bottom: 60px; user-select: none; padding-top: 40px; }
     #login-screen { position: fixed; top:0; left:0; width:100%; height:100%; background:#fff; z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; }
@@ -995,7 +995,7 @@ function renderGmRoute(route, title, headerCls) {
         <div class="gm-col-line walk-seg"></div>
         <div class="gm-col-seg">
           <div class="gm-seg-box walk-box">
-            <div class="gm-seg-icon walk">🚶</div>
+            <div class="gm-seg-icon walk"><i class="bi bi-person-walking"></i></div>
             <div class="gm-seg-content">
               <div class="gm-walk-text">徒歩 ${item.duration}</div>
             </div>
@@ -1005,6 +1005,7 @@ function renderGmRoute(route, title, headerCls) {
     } else if (item.type === 'transit') {
       const isShin = item.isShin;
       const isBus = item.isBus;
+      const iconEl = isShin ? '<i class="bi bi-train-front-fill"></i>' : isBus ? '<i class="bi bi-bus-front-fill"></i>' : '<i class="bi bi-train-front"></i>';
       const iconCls = isShin ? 'shin' : isBus ? 'bus' : 'rail';
       const badgeCls = isShin ? 'shin' : isBus ? 'bus' : '';
       const lineHtml = item.line ? `<span class="gm-line-badge ${badgeCls}">${item.line}</span>` : '';
@@ -1016,6 +1017,7 @@ function renderGmRoute(route, title, headerCls) {
         <div class="gm-col-line ${isShin ? 'shin-seg' : ''}"></div>
         <div class="gm-col-seg">
           <div class="gm-seg-box ${isShin ? 'shin-box' : ''}">
+            <div class="gm-seg-icon ${iconCls}">${iconEl}</div>
             <div class="gm-seg-content">
               <div class="gm-seg-main">${lineHtml}${vehicleHtml}${shinTag}</div>
               ${dirHtml}
