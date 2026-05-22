@@ -74,13 +74,36 @@
     .timeline-item { position: relative; margin-bottom: 15px; }
     .timeline-item::before { content: ''; position: absolute; left: -26px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #0d6efd; border: 2px solid #fff; }
     .timeline-content { background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid #eee; font-size: 0.9rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    .route-endpoint { display: flex; align-items: center; padding: 6px 0; }
-    .route-time-badge { background: #343a40; color: #fff; font-weight: bold; padding: 3px 10px; border-radius: 4px; font-size: 1rem; min-width: 52px; text-align: center; }
-    .route-time-badge.arrive { background: #198754; }
-    .route-steps-list { border-left: 3px solid #ced4da; margin-left: 24px; padding: 6px 0 6px 16px; display: flex; flex-direction: column; gap: 6px; }
-    .route-step { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; background: #f8f9fa; border-radius: 6px; font-size: 0.88rem; line-height: 1.5; }
-    .route-step.step-shin { background: #fff5f5; border-left: 3px solid #dc3545; }
-    .route-step-icon { min-width: 20px; text-align: center; font-size: 1rem; padding-top: 1px; }
+    /* Google Maps風ルート表示 */
+    .gm-route { background: #fff; padding: 8px 0; }
+    .gm-stop { display: grid; grid-template-columns: 56px 24px 1fr; align-items: center; padding: 4px 0; position: relative; }
+    .gm-stop-time { font-size: 0.95rem; font-weight: 600; color: #202124; text-align: right; padding-right: 8px; }
+    .gm-stop-time.empty { color: transparent; }
+    .gm-stop-dot-col { display: flex; justify-content: center; align-items: center; height: 100%; position: relative; }
+    .gm-stop-dot { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 3px solid #1a73e8; box-sizing: border-box; z-index: 2; }
+    .gm-stop-dot.origin { background: #1a73e8; border-color: #1a73e8; }
+    .gm-stop-dot.dest { background: #d93025; border-color: #d93025; }
+    .gm-stop-name { font-size: 0.95rem; font-weight: 600; color: #202124; padding-left: 4px; }
+    .gm-stop-name.origin, .gm-stop-name.dest { color: #1a73e8; }
+    .gm-stop-name.dest { color: #d93025; }
+    .gm-seg { display: grid; grid-template-columns: 56px 24px 1fr; padding: 2px 0; position: relative; }
+    .gm-seg-spacer { }
+    .gm-seg-line { display: flex; justify-content: center; position: relative; min-height: 32px; }
+    .gm-seg-line::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 4px; background: #5f6368; z-index: 1; }
+    .gm-seg-line.walk::before { background: none; border-left: 4px dotted #9aa0a6; width: 0; }
+    .gm-seg-line.shin::before { background: #dc3545; }
+    .gm-seg-body { display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; margin: 2px 0 2px 4px; border-radius: 6px; background: #f1f3f4; }
+    .gm-seg-body.shin { background: #fff5f5; border-left: 3px solid #dc3545; padding-left: 9px; }
+    .gm-seg-icon { font-size: 1.2rem; color: #5f6368; line-height: 1.4; min-width: 22px; text-align: center; }
+    .gm-seg-icon.walk { color: #9aa0a6; }
+    .gm-seg-icon.shin { color: #dc3545; }
+    .gm-seg-content { flex: 1; font-size: 0.88rem; line-height: 1.45; color: #3c4043; }
+    .gm-seg-title { font-weight: 600; color: #202124; margin-bottom: 2px; }
+    .gm-seg-detail { font-size: 0.82rem; color: #5f6368; }
+    .gm-line-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; background: #1a73e8; color: #fff; font-size: 0.78rem; font-weight: 600; margin-right: 4px; vertical-align: middle; }
+    .gm-line-badge.bus { background: #137333; }
+    .gm-line-badge.shin { background: #dc3545; }
+    .gm-debug-btn { font-size: 0.7rem; color: #5f6368; }
     .header-loc { width: 100%; height: 2.4em; font-size: 0.75rem; line-height: 1.2; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: center; word-break: break-all; }
     .badge-pediatric { display: inline-block; background-color: #dc3545; color: white; font-size: 0.65rem; padding: 1px 4px; border-radius: 4px; margin-left: 4px; vertical-align: middle; line-height: 1.2; }
     .excel-cell.selected { background-color: #e7f1ff !important; outline: 2px solid #0d6efd; z-index: 10; }
@@ -906,6 +929,137 @@ function getCellHtml(info) {
 }
 
 // ===== 詳細ルートモーダル =====
+// ステップ文字列から構造化情報を抽出
+function parseRouteStep(raw) {
+  const s = String(raw);
+  const info = { raw: s, type: 'transit' };
+  if (s.includes('徒歩')) info.type = 'walk';
+  if (s.includes('新幹線')) info.type = 'shinkansen';
+  if (s.match(/バス/)) info.type = info.type === 'shinkansen' ? 'shinkansen' : 'bus';
+
+  // 時刻 HH:MM をすべて抽出
+  const times = [...s.matchAll(/(\d{1,2}):(\d{2})/g)].map(m => m[0]);
+  if (times.length) { info.timeFrom = times[0]; if (times.length > 1) info.timeTo = times[times.length-1]; }
+
+  // 駅名（XX駅・XX前・XX口）
+  const stations = [...s.matchAll(/([一-龯ぁ-んァ-ヶー一-龯A-Za-z0-9０-９]{1,12}(?:駅|前|口|町|公園|空港|港|ターミナル))/g)].map(m => m[1]);
+  if (stations.length) { info.stationFrom = stations[0]; if (stations.length > 1) info.stationTo = stations[stations.length-1]; }
+
+  // 路線名 XX線
+  const line = s.match(/([一-龯ぁ-んァ-ヶーA-Za-z0-9]{1,15}線)/);
+  if (line) info.line = line[1];
+
+  // 行先 XX行 / XX方面
+  const dir = s.match(/([一-龯ぁ-んァ-ヶーA-Za-z0-9]{1,12}(?:行|方面))/);
+  if (dir) info.direction = dir[1];
+
+  // 種別
+  const tt = s.match(/(普通|快速|特急|急行|準急|新快速|特別快速|区間快速|準快速|各停|各駅停車)/);
+  if (tt) info.trainType = tt[1];
+
+  // 所要時間 X分 / X時間Y分
+  const dur = s.match(/(?:(\d+)\s*時間)?\s*(\d+)\s*分/);
+  if (dur) info.duration = (dur[1] ? dur[1] + '時間' : '') + dur[2] + '分';
+
+  // 距離
+  const dist = s.match(/(\d+(?:\.\d+)?)\s*(km|m|キロ|メートル)/);
+  if (dist) info.distance = dist[1] + (dist[2] === 'キロ' ? 'km' : dist[2] === 'メートル' ? 'm' : dist[2]);
+
+  // 駅数
+  const sc = s.match(/(\d+)\s*駅/);
+  if (sc) info.stops = sc[1];
+  return info;
+}
+
+function renderGmRoute(route, title, headerCls) {
+  if (!route || !route.found) return `<div class="alert alert-secondary mb-3">${title}: ルートが見つかりませんでした</div>`;
+  const segs = (route.steps || []).map(parseRouteStep);
+  const hasShin = segs.some(s => s.type === 'shinkansen');
+
+  let body = '';
+  // 出発地
+  body += `<div class="gm-stop">
+    <div class="gm-stop-time">${route.depart || ''}</div>
+    <div class="gm-stop-dot-col"><div class="gm-stop-dot origin"></div></div>
+    <div class="gm-stop-name origin">出発地</div>
+  </div>`;
+
+  segs.forEach((seg, i) => {
+    const isWalk = seg.type === 'walk';
+    const isShin = seg.type === 'shinkansen';
+    const isBus = seg.type === 'bus';
+    const lineCls = isWalk ? 'walk' : isShin ? 'shin' : '';
+    const bodyCls = isShin ? 'shin' : '';
+    const iconCls = isWalk ? 'walk' : isShin ? 'shin' : '';
+    const icon = isWalk
+      ? '<i class="bi bi-person-walking"></i>'
+      : isShin
+        ? '<i class="bi bi-train-front-fill"></i>'
+        : isBus
+          ? '<i class="bi bi-bus-front"></i>'
+          : '<i class="bi bi-train-front"></i>';
+
+    let title2 = '';
+    if (isWalk) {
+      title2 = '<span class="gm-seg-title">徒歩</span>';
+    } else {
+      const badgeCls = isShin ? 'shin' : isBus ? 'bus' : '';
+      const lineBadge = seg.line ? `<span class="gm-line-badge ${badgeCls}">${seg.line}</span>` : '';
+      const tt = seg.trainType ? `<span class="me-1">${seg.trainType}</span>` : '';
+      const dir = seg.direction ? `<span class="text-muted">${seg.direction}</span>` : '';
+      const shinTag = isShin ? '<span class="badge-shinkansen ms-1">新幹線</span>' : '';
+      title2 = `<div class="gm-seg-title">${lineBadge}${tt}${dir}${shinTag}</div>`;
+    }
+    const detailParts = [];
+    if (seg.duration) detailParts.push(seg.duration);
+    if (seg.distance) detailParts.push(seg.distance);
+    if (seg.stops) detailParts.push(`${seg.stops}駅乗車`);
+    const detail = detailParts.length ? `<div class="gm-seg-detail">${detailParts.join(' ・ ')}</div>` : '';
+
+    body += `<div class="gm-seg">
+      <div class="gm-seg-spacer"></div>
+      <div class="gm-seg-line ${lineCls}"></div>
+      <div class="gm-seg-body ${bodyCls}">
+        <div class="gm-seg-icon ${iconCls}">${icon}</div>
+        <div class="gm-seg-content">${title2}${detail}</div>
+      </div>
+    </div>`;
+
+    // 中間駅（このセグメントが到着駅情報を持つ場合）
+    if (seg.stationTo && i < segs.length - 1) {
+      body += `<div class="gm-stop">
+        <div class="gm-stop-time">${seg.timeTo || ''}</div>
+        <div class="gm-stop-dot-col"><div class="gm-stop-dot"></div></div>
+        <div class="gm-stop-name">${seg.stationTo}</div>
+      </div>`;
+    }
+  });
+
+  // 目的地
+  body += `<div class="gm-stop">
+    <div class="gm-stop-time">${route.arrive || ''}</div>
+    <div class="gm-stop-dot-col"><div class="gm-stop-dot dest"></div></div>
+    <div class="gm-stop-name dest">目的地</div>
+  </div>`;
+
+  const titleBadge = hasShin ? ' <span class="badge-shinkansen">新幹線</span>' : '';
+  return `<div class="card mb-3 shadow-sm">
+    <div class="card-header ${headerCls} text-white">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-bold">${title}${titleBadge}</div>
+          <div class="small" style="opacity:0.9">${route.depart} 発 → ${route.arrive} 着</div>
+        </div>
+        <span class="badge bg-light text-dark" style="font-size:0.95rem;padding:6px 10px">${route.duration}</span>
+      </div>
+    </div>
+    <div class="card-body p-2" style="background:#fff">
+      ${hasShin ? '<div class="alert alert-warning py-1 px-2 mb-2 small d-flex align-items-center"><span class="badge-shinkansen me-2">新幹線</span>新幹線を含むルートです。</div>' : ''}
+      <div class="gm-route">${body}</div>
+    </div>
+  </div>`;
+}
+
 async function openDetail(sName, lName) {
   const st = appData.students.find(x => x.name === sName);
   const lo = appData.locations.find(x => x.name === lName);
@@ -919,44 +1073,10 @@ async function openDetail(sName, lName) {
   resDiv.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">ルート検索中...</div></div>';
   try {
     const res = await callGasApi('getDeepRouteAnalysis', { origin: st.address, dest: lo.address, time: lo.time });
-    const renderRoute = (route, title, colorClass) => {
-      if (!route || !route.found) return `<div class="alert alert-secondary mb-3">${title}: ルートが見つかりませんでした</div>`;
-      const hasShin = route.steps && route.steps.some(s => s.includes('新幹線'));
-      const titleBadge = hasShin ? ` <span class="badge-shinkansen">新幹線</span>` : '';
-      const stepsHtml = (route.steps || []).map(step => {
-        const isWalk = step.includes('徒歩');
-        const isShin = step.includes('新幹線');
-        const icon = isWalk
-          ? '<i class="bi bi-person-walking text-secondary"></i>'
-          : isShin
-            ? '<i class="bi bi-train-front-fill text-danger"></i>'
-            : '<i class="bi bi-train-front text-primary"></i>';
-        const badge = isShin ? ' <span class="badge-shinkansen">新幹線</span>' : '';
-        return `<div class="route-step${isShin ? ' step-shin' : ''}"><div class="route-step-icon">${icon}</div><div>${step}${badge}</div></div>`;
-      }).join('');
-      return `<div class="card mb-3">
-        <div class="card-header ${colorClass} text-white">
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="fw-bold">${title}${titleBadge}</span>
-            <span class="badge bg-light text-dark" style="font-size:0.95rem">${route.duration}</span>
-          </div>
-          <div class="small mt-1" style="opacity:0.85">${route.depart} 発 → ${route.arrive} 着</div>
-        </div>
-        <div class="card-body" style="background:#f8f9fa">
-          ${hasShin ? '<div class="alert alert-warning py-1 px-2 mb-3 small"><strong><span class="badge-shinkansen">新幹線</span> 新幹線を含むルートです。</strong></div>' : ''}
-          <div class="route-endpoint">
-            <span class="route-time-badge">${route.depart}</span>
-            <span class="ms-2 text-muted small">出発</span>
-          </div>
-          <div class="route-steps-list">${stepsHtml}</div>
-          <div class="route-endpoint">
-            <span class="route-time-badge arrive">${route.arrive}</span>
-            <span class="ms-2 text-muted small">到着</span>
-          </div>
-        </div>
-      </div>`;
-    };
-    resDiv.innerHTML = renderRoute(res.primary, "最適ルート", "bg-success") + renderRoute(res.early, "1本前 (余裕あり)", "bg-primary");
+    window.__lastRouteRes = res; // デバッグ用
+    const html = renderGmRoute(res.primary, "最適ルート", "bg-success") + renderGmRoute(res.early, "1本前 (余裕あり)", "bg-primary");
+    const debugBtn = `<div class="text-end"><button class="btn btn-link btn-sm gm-debug-btn" onclick="document.getElementById('gm-raw').style.display=document.getElementById('gm-raw').style.display==='none'?'block':'none'">生データ表示</button></div><pre id="gm-raw" style="display:none;font-size:0.7rem;background:#f8f9fa;padding:8px;border-radius:4px;max-height:300px;overflow:auto">${JSON.stringify(res, null, 2)}</pre>`;
+    resDiv.innerHTML = html + debugBtn;
   } catch(e) {
     resDiv.innerHTML = `<div class="alert alert-danger">詳細ルートの取得に失敗しました: ${e.message}</div>`;
   }
