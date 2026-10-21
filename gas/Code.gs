@@ -54,6 +54,8 @@ function place_(s) {
   return s + ', 日本';
 }
 function station_name_(s) { s = String(s || '').trim(); return /駅$/.test(s) ? s : s + '駅'; }
+// 駅・バス停・電停の場所：緯度経度があればそれ（バス停は名前だと別の所に当たる）、無ければ「〇〇駅」
+function stop_(name, loc) { return loc ? String(loc) : place_(station_name_(name)); }
 
 // 次の水曜日（平日の朝の便で探す）
 function weekday_(hhmm) {
@@ -64,12 +66,12 @@ function weekday_(hhmm) {
   return d;
 }
 
-// ---- 駅→駅（電車）。job = {from, to, arrive:'08:10'} ----
+// ---- 駅→施設の最寄り（電車・バス・路面電車）。job = {from, to, toLoc?, arrive:'08:10'} ----
 function transit_(j) {
   const from = station_name_(j.from), to = station_name_(j.to);
   if (from === to) return { ride: 0, transfers: 0, shinkansen: false, lines: '同じ駅', dep: '', arr: '' };
   const res = Maps.newDirectionFinder()
-    .setOrigin(place_(from)).setDestination(place_(to))
+    .setOrigin(place_(from)).setDestination(stop_(j.to, j.toLoc))
     .setMode(Maps.DirectionFinder.Mode.TRANSIT)
     .setArrive(weekday_(j.arrive)).setLanguage('ja').getDirections();
   if (!res.routes || !res.routes.length) return { err: '経路なし' };
@@ -96,10 +98,10 @@ function transit_(j) {
   };
 }
 
-// ---- 施設の駅→施設（徒歩）。job = {station, address} ----
+// ---- 施設の最寄り→施設（徒歩）。job = {station, loc?, address} ----
 function walk_(j) {
   const res = Maps.newDirectionFinder()
-    .setOrigin(place_(station_name_(j.station))).setDestination(place_(j.address))
+    .setOrigin(stop_(j.station, j.loc)).setDestination(place_(j.address))
     .setMode(Maps.DirectionFinder.Mode.WALKING).setLanguage('ja').getDirections();
   if (!res.routes || !res.routes.length) return { err: '徒歩の経路なし' };
   const leg = res.routes[0].legs[0];
@@ -116,23 +118,24 @@ function car_(j) {
   return { car: Math.round(res.routes[0].legs[0].duration.value / 60) };
 }
 
-// ---- 施設の最寄り駅の下書き。job = {address} ----
-// 施設から岡山駅へ電車で行く経路をとり、最初に乗る鉄道の駅を返す（先生が直す前提の下書き）
+// ---- 施設の最寄りの駅・バス停・電停の下書き。job = {address, arrive} ----
+// 岡山駅から施設へ公共交通（電車・バス・路面電車）で行く経路をとり、最後に降りる所を返す（先生が直す前提の下書き）
 function station_(j) {
   const res = Maps.newDirectionFinder()
-    .setOrigin(place_(j.address)).setDestination(place_('岡山駅'))
-    .setMode(Maps.DirectionFinder.Mode.TRANSIT)   // Apps Script には電車だけに絞る指定が無い＝バスは下で読み飛ばす
-    .setDepart(weekday_('08:00')).setLanguage('ja').getDirections();
-  if (!res.routes || !res.routes.length) return { err: '駅が見つからない' };
+    .setOrigin(place_('岡山駅')).setDestination(place_(j.address))
+    .setMode(Maps.DirectionFinder.Mode.TRANSIT)
+    .setArrive(weekday_(j.arrive || '08:10')).setLanguage('ja').getDirections();
+  if (!res.routes || !res.routes.length) return { err: '岡山駅からの経路が見つからない' };
   const steps = res.routes[0].legs[0].steps;
-  let walk = 0, busBefore = false;
-  for (let i = 0; i < steps.length; i++) {
-    const st = steps[i];
-    if (st.travel_mode === 'WALKING') { walk += Math.round(st.duration.value / 60); continue; }
-    if (!st.transit_details) continue;
-    const v = ((st.transit_details.line || {}).vehicle || {}).type || '';
-    if (/BUS/.test(v)) { busBefore = true; continue; }
-    return { station: st.transit_details.departure_stop.name.replace(/駅$/, ''), walk: busBefore ? null : walk, busBefore: busBefore };
+  let last = -1;
+  steps.forEach((st, i) => { if (st.travel_mode === 'TRANSIT' && st.transit_details) last = i; });
+  if (last < 0) {   // 乗り物を使わない経路しか出ない＝岡山駅から歩く
+    return { station: '岡山', kind: '電車', walk: Math.round(res.routes[0].legs[0].duration.value / 60), walkOnly: true };
   }
-  return { err: '岡山駅まで歩ける距離（駅は手で）' };
+  const td = steps[last].transit_details, stop = td.arrival_stop;
+  const v = ((td.line || {}).vehicle || {}).type || '';
+  const kind = /BUS/.test(v) ? 'バス' : /TRAM|LIGHT_RAIL/.test(v) ? '路面電車' : '電車';
+  let walk = 0;
+  for (let i = last + 1; i < steps.length; i++) walk += Math.round(steps[i].duration.value / 60);
+  return { station: stop.name.replace(/駅$/, ''), kind: kind, loc: stop.location.lat + ',' + stop.location.lng, walk: walk };
 }

@@ -205,7 +205,7 @@ function renderFac() {
     const acc = (f.access && f.access !== '徒歩') ? `${f.access}${f.accessMin != null ? f.accessMin + '分' : '?'}` : (f.walk != null ? `徒歩${f.walk}分` : '<span class="tag yel">未計算</span>');
     const bike = num(f.bike) != null && (f.access || '徒歩') === '徒歩' ? `<span class="tag">自転車${f.bike}分</span>` : '';
     h += `<tr class="clk" data-fid="${fid}"><td>${esc(f.name)}${f.draft ? ' <span class="tag yel">駅は下書き</span>' : ''}<div class="hint" style="margin:0">${esc(f.address)}</div></td>
-      <td>${f.station ? esc(stName(f.station)) : '<span class="tag red">駅なし</span>'}</td><td class="num">${acc}${bike}</td>
+      <td>${f.station ? esc(stName(f.station)) + (f.stopKind && f.stopKind !== '電車' ? ` <span class="tag">${esc(f.stopKind)}</span>` : '') : '<span class="tag red">駅なし</span>'}</td><td class="num">${acc}${bike}</td>
       <td>${f.pediatric ? '小児' : ''}</td><td>${f.carOk ? '可' : ''}</td>
       ${TYPES.map(t => `<td class="num">${num(cap[t]) || ''}</td>`).join('')}<td>${esc(yf.start || '')}</td><td>${l3 != null ? (arriveBy(fid) || '') : ''}</td></tr>`;
   }
@@ -239,6 +239,7 @@ function openFac(fid) {
       walk: num(fm.walk.value), bike: num(fm.bike.value), access: fm.access.value, accessMin: num(fm.accessMin.value),
       pediatric: fm.pediatric.checked, carOk: fm.carOk.checked, note: fm.note.value.trim(),
       draft: (f.draft && stName(oldSt) === newSt) ? true : null,
+      stopKind: stName(oldSt) === newSt ? (f.stopKind || null) : null, stopLoc: stName(oldSt) === newSt ? (f.stopLoc || null) : null,
     };
     // 駅や住所が変わったら、徒歩の分数は計算し直す
     if (fid && (stName(oldSt) !== newSt || (f.address || '') !== rec.address) && num(fm.walk.value) === num(f.walk)) { rec.walk = null; rec.bike = null; }
@@ -282,7 +283,7 @@ $('fac-paste').onclick = () => openPaste('施設を表から貼り付け', '1行
     const f = { ...(up['facilities/' + id] || S.facilities[id] || {}) }, yf = { ...(up[ypath('facilities/' + id)] || yFac(id)) }, cap = { ...(yf.cap || {}) };
     f.name = r[0];
     if (r[1]) f.address = r[1];
-    if (r[2]) { f.station = stName(r[2]); f.draft = null; }
+    if (r[2]) { if (stName(r[2]) !== stName(f.station)) { f.stopKind = null; f.stopLoc = null; } f.station = stName(r[2]); f.draft = null; }
     if (r[3]) f.walk = num(r[3]);
     if (r[4]) f.access = ['徒歩', 'バス', '送迎'].includes(r[4]) ? r[4] : '徒歩';
     if (r[5]) f.accessMin = num(r[5]);
@@ -338,33 +339,33 @@ function normTime(t) { const m = String(t || '').match(/(\d{1,2})[:：時](\d{2}
 
 // 駅の下書き（駅が空で住所がある施設）
 $('fac-draft').onclick = async () => {
-  const todo = Object.keys(S.facilities).filter(fid => !S.facilities[fid].station && S.facilities[fid].address);
-  if (!todo.length) return toast('駅が空の施設は無い');
-  if (!confirm(`${todo.length}施設の最寄り駅を Maps で下書きする（あとで先生が直す前提）`)) return;
+  // 駅が空の施設と、まだ「駅は下書き」のままの施設（先生が直した駅は触らない）
+  const todo = Object.keys(S.facilities).filter(fid => (!S.facilities[fid].station || S.facilities[fid].draft) && S.facilities[fid].address);
+  if (!todo.length) return toast('駅が空・下書きのままの施設は無い');
+  if (!confirm(`${todo.length}施設の最寄り（駅・バス停・電停）を Maps で下書きする（駅が空の施設と「駅は下書き」のままの施設。先生が直した駅は触らない）`)) return;
   busy(true, '駅を探している…');
   let ok = 0; const errs = {}; const okayama = [];
   try {
     for (let i = 0; i < todo.length; i += 10) {
       const part = todo.slice(i, i + 10);
-      const res = await gas('station', part.map(fid => ({ address: S.facilities[fid].address })));
+      const res = await gas('station', part.map(fid => ({ address: S.facilities[fid].address, arrive: startOf(fid) })));
       const up = {};
       part.forEach((fid, k) => {
-        let r = res[k] || {};
-        // 岡山駅まで電車に乗らない施設（徒歩かバスだけ）＝岡山駅を下書きにする（バスかどうかは先生が確かめる）
-        if (!r.station && /^岡山駅まで/.test(r.err || '')) { r = { station: '岡山' }; okayama.push(S.facilities[fid].name || fid); }
+        const r = res[k] || {};
+        if (r.walkOnly) okayama.push(S.facilities[fid].name || fid);
         if (r.station) ok++; else { const m = r.err || '返事なし'; (errs[m] = errs[m] || []).push(S.facilities[fid].name || fid); }
-        if (r.station) { up[`facilities/${fid}/station`] = r.station; up[`facilities/${fid}/draft`] = true; up[`facilities/${fid}/walk`] = null; }
-        if (r.station && r.busBefore) { up[`facilities/${fid}/access`] = 'バス'; }
+        if (r.station) Object.assign(up, { [`facilities/${fid}/station`]: r.station, [`facilities/${fid}/stopKind`]: r.kind || null, [`facilities/${fid}/stopLoc`]: r.loc || null,
+          [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: null, [`facilities/${fid}/bike`]: null, [`facilities/${fid}/access`]: null });
       });
       await db.ref().update(up);
       busy(true, `駅を探している… ${Math.min(i + 10, todo.length)}/${todo.length}`);
     }
     const ng = Object.keys(errs);
-    const oka = okayama.length ? `\n\n岡山駅を入れた ${okayama.length}件（岡山駅まで電車に乗らない＝徒歩かバス。バスなら手段を直す）：${okayama.join('、')}` : '';
+    const oka = okayama.length ? `\n\n岡山駅から歩きの経路しか出なかった ${okayama.length}件（駅は「岡山」で入れた・確かめる）：${okayama.join('、')}` : '';
     if (ng.length || oka) {
       busy(false);
       alert(`下書きできた ${ok}件／できなかった ${todo.length - ok}件` + oka + (ng.length ? '\n\n' : '') + ng.map(m => `【${m}】${errs[m].length}件：${errs[m].slice(0, 5).join('、')}${errs[m].length > 5 ? ' ほか' : ''}`).join('\n'));
-    } else toast(`下書きした ${ok}件。「駅は下書き」の印の施設を確かめて直す`);
+    } else toast(`下書きした ${ok}件（駅・バス停・電停）。「駅は下書き」の印の施設を確かめて直す`);
   } catch (e) { fail(e); }
   busy(false);
 };
@@ -485,7 +486,7 @@ function neededJobs() {
         if (!f.station || !arr) { missing.fac++; continue; }
         for (const b of bs) {
           const key = rKey(b.st, f.station, arr);
-          if (!S.routes[key]) transit[key] = { from: stName(b.st), to: stName(f.station), arrive: arr };
+          if (!S.routes[key]) transit[key] = { from: stName(b.st), to: stName(f.station), toLoc: f.stopLoc || null, arrive: arr };
         }
       }
     }
@@ -529,7 +530,7 @@ $('calc-run').onclick = async () => {
     const step = n => { done += n; bar.style.width = (all ? done / all * 100 : 100) + '%'; msg.textContent = `${done} / ${all}`; };
     for (let i = 0; i < j.walk.length && !S.calcStop; i += 10) {
       const part = j.walk.slice(i, i + 10);
-      const res = await gas('walk', part.map(fid => ({ station: S.facilities[fid].station, address: S.facilities[fid].address })));
+      const res = await gas('walk', part.map(fid => ({ station: S.facilities[fid].station, loc: S.facilities[fid].stopLoc || null, address: S.facilities[fid].address })));
       const up = {};
       part.forEach((fid, k) => { const r = res[k] || {}; if (r.walk != null) { up[`facilities/${fid}/walk`] = r.walk; up[`facilities/${fid}/bike`] = r.bike; Object.assign(S.facilities[fid], { walk: r.walk, bike: r.bike }); } });
       await db.ref().update(up); step(part.length);
@@ -651,7 +652,7 @@ function renderCands(fids, evs, A, cnt, lock) {
     const b = r.ev.best, mk = mark(b && b.total);
     let brk = '';
     if (b && b.k === '車') brk = '車で直接';
-    else if (b) brk = `${b.k === '実家' ? '実家から：' : ''}①${esc(b.b.mode)}${b.b.min} ＋ ②電車${b.r.ride}${b.r.transfers ? '（乗換' + b.r.transfers + '）' : ''} ＋ ③${esc(r.f.access && r.f.access !== '徒歩' ? r.f.access : '徒歩')}${b.l3}`;
+    else if (b) brk = `${b.k === '実家' ? '実家から：' : ''}①${esc(b.b.mode)}${b.b.min} ＋ ②電車・バス${b.r.ride}${b.r.transfers ? '（乗換' + b.r.transfers + '）' : ''} ＋ ③${esc(r.f.access && r.f.access !== '徒歩' ? r.f.access : '徒歩')}${b.l3}`;
     else if (r.ev.errs.length) brk = esc(r.ev.errs.join('／'));
     else brk = '未計算';
     const tags = [];
@@ -715,9 +716,9 @@ function openDetail(sid, fid) {
     if (o.k !== '車') {
       h += `<table class="dt" style="margin-top:6px">
         <tr><td>① 駅まで</td><td>${esc(stName(o.b.st))}駅まで ${esc(o.b.mode)} ${o.b.min}分（本人の申告）</td></tr>
-        <tr><td>② 電車</td><td>${o.r.ride}分（${esc(o.r.dep)}発→${esc(o.r.arr)}着・乗換${o.r.transfers}回${o.r.shinkansen ? '・新幹線' : ''}）<div class="hint" style="margin:2px 0 0">${esc(o.r.lines)}</div>
+        <tr><td>② 電車・バス</td><td>${o.r.ride}分（${esc(o.r.dep)}発→${esc(o.r.arr)}着・乗換${o.r.transfers}回${o.r.shinkansen ? '・新幹線' : ''}）<div class="hint" style="margin:2px 0 0">${esc(o.r.lines)}</div>
           ${o.r.fromAddr ? `<div class="hint" style="margin:0">Maps が読んだ駅：${esc(o.r.fromAddr)} → ${esc(o.r.toAddr)}</div>` : ''}</td></tr>
-        <tr><td>③ 施設の駅から</td><td>${esc(stName(f.station))}駅から ${esc(f.access || '徒歩')} ${o.l3}分</td></tr></table>`;
+        <tr><td>③ 施設の駅から</td><td>${esc(stName(f.station))}${f.stopKind && f.stopKind !== '電車' ? '（' + esc(f.stopKind) + '）' : '駅'}から ${esc(f.access || '徒歩')} ${o.l3}分</td></tr></table>`;
     } else h += `<div class="hint">本人の住所から車（住所は保存していない）</div>`;
     h += `</div>`;
   }
