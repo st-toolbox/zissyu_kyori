@@ -114,6 +114,23 @@ dialog .foot { display: flex; gap: 8px; margin-top: 16px; }
 .dt td:first-child { color: var(--sub); width: 130px; }
 
 #busy { position: fixed; inset: 0; background: rgba(255,255,255,.6); display: none; align-items: center; justify-content: center; z-index: 50; font-weight: 500; }
+#busy .bar, #busy .busy-foot { display: none; }
+#busy.prog .busy-card { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 18px 22px; width: min(520px, 90vw); box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+#busy.prog .bar { display: block; }
+#busy.prog .busy-foot { display: flex; gap: 10px; align-items: center; }
+#busy .busy-foot .hint { flex: 1; margin: 0; font-weight: 400; }
+.sum { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 4px 0; align-items: center; }
+.sum > .row { width: 100%; }
+.meter { display: flex; width: 100%; height: 8px; background: var(--main-l); border-radius: 4px; overflow: hidden; margin: 6px 0; }
+.meter > i { display: block; height: 100%; transition: width .3s; }
+.meter > i.g { background: var(--good); }
+.meter > i.y { background: #e0b04a; }
+.meter > i.r { background: var(--bad); }
+.meter.sm { width: 90px; margin: 0; flex: none; }
+.car-row .st { width: 64px; }
+.car-row .st .tag { margin-left: 0; }
+.car-row.now { background: #f2f7fb; }
+.car-row.done .nm { color: var(--sub); }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 60; }
 
 @media (max-width: 900px) {

@@ -6,7 +6,7 @@
 <title>実習配置アプリ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261021j">
+<link rel="stylesheet" href="style.css?v=20261021k">
 </head>
 <body>
 
@@ -48,6 +48,7 @@
       </div>
       <p class="hint">施設そのもの（名前・住所・駅・駅からの時間・小児・車通勤）は年度をまたいで同じ。受入人数と始業時刻はこの年度の分。<br>
         駅から先の時間は「徒歩（Maps）」が基本。バスや送迎がある施設は手段を変えて分数を入れる。自転車の分数は提案に使うだけ（既定にはしない）。</p>
+      <div id="fac-sum" class="sum"></div>
       <div class="tablewrap"><table id="fac-table"></table></div>
     </section>
 
@@ -77,6 +78,7 @@
       <h2>住所から計算（最終）</h2>
       <p class="hint">家の住所→施設の住所を、始業−ゆとりに着く電車・バスで Google Maps に聞く。出た学生は、ふだんの駅の見積もりの代わりにこの分数で割り振る。住所はここに入れて計算するだけで<b>保存しない</b>（画面を離れると消える）。保存するのは施設ごとの分数と乗る路線だけ。「車で直接」の学生は、同じ住所で車通勤可の施設の車の時間も出す。</p>
       <div class="row" style="margin-bottom:8px"><button id="addr-paste">住所をまとめて貼り付け</button></div>
+      <div class="sum" id="car-sum"></div>
       <div class="box" id="car-box"></div>
     </section>
 
@@ -198,13 +200,15 @@
 <!-- 詳細 -->
 <dialog id="dlg-detail"><div id="detail-body"></div><div class="foot"><button type="button" id="detail-close">閉じる</button></div></dialog>
 
-<div id="busy">読み込み中…</div>
+<div id="busy"><div class="busy-card"><div id="busy-msg">読み込み中…</div>
+  <div class="bar"><div id="busy-bar"></div></div>
+  <div class="busy-foot"><b id="busy-num"></b><span id="busy-sub" class="hint"></span><button id="busy-stop" class="small">止める</button></div></div></div>
 <div id="toast"></div>
 <div id="print-area"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="app.js?v=20261021h"></script>
+<script src="app.js?v=20261021i"></script>
 </body>
 </html>

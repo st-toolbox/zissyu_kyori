@@ -30,7 +30,16 @@ const me = () => (S.user && S.user.email) || '';
 const fmtMin = m => m == null ? '—' : (m < 60 ? m + '分' : Math.floor(m / 60) + '時間' + (m % 60 ? m % 60 + '分' : ''));
 const fmtAt = iso => iso ? iso.slice(0, 16).replace('T', ' ') : '';
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', 2600); }
-function busy(on, msg) { $('busy').textContent = msg || '読み込み中…'; $('busy').style.display = on ? 'flex' : 'none'; }
+function busy(on, msg) {
+  $('busy-msg').textContent = msg || '読み込み中…'; $('busy').classList.remove('prog'); $('busy').style.display = on ? 'flex' : 'none';
+}
+// 進み具合（題・済んだ数/全部・いま何をしているか）。止めるは S.calcStop を立てる＝今の分を保存してから止まる
+function prog(title, done, total, sub, numText) {
+  $('busy-msg').textContent = title; $('busy').classList.add('prog'); $('busy').style.display = 'flex';
+  $('busy-bar').style.width = (total ? Math.min(100, done / total * 100) : 0) + '%';
+  $('busy-num').textContent = numText || `${done} / ${total}`;
+  $('busy-sub').textContent = S.calcStop ? '止めている…（今の分を保存してから止まる）' : (sub || '');
+}
 function fail(e) { console.error(e); alert('うまくいかなかった：' + (e && e.message || e)); }
 // Firebase のキーに使えない文字を置き換える
 const fk = s => String(s || '').trim().replace(/駅$/, '').replace(/[.#$/\[\]]/g, '_');
@@ -238,6 +247,10 @@ function renderFac() {
       ${TYPES.map(t => `<td class="num">${num(cap[t]) || ''}</td>`).join('')}<td>${esc(yf.start || '')}</td><td>${l3 != null ? (arriveBy(fid) || '') : ''}</td></tr>`;
   }
   $('fac-table').innerHTML = h;
+  const nAll = fids.length, nDraft = fids.filter(fid => S.facilities[fid].station && S.facilities[fid].draft).length,
+    nFix = fids.filter(fid => S.facilities[fid].station && !S.facilities[fid].draft).length, nNone = nAll - nDraft - nFix;
+  $('fac-sum').innerHTML = !nAll ? '' : `<div class="meter"><i class="g" style="width:${nFix / nAll * 100}%"></i><i class="y" style="width:${nDraft / nAll * 100}%"></i></div>
+    <span class="tag grn">駅が決まった ${nFix}</span><span class="tag yel">下書きのまま ${nDraft}</span><span class="tag red">駅なし ${nNone}</span><span class="hint" style="margin:0 0 0 6px">／${nAll}施設</span>`;
 }
 $('fac-table').onclick = e => { const tr = e.target.closest('tr[data-fid]'); if (tr) openFac(tr.dataset.fid); };
 $('fac-add').onclick = () => openFac(null);
@@ -398,24 +411,30 @@ async function osmStops(p) {
   return [];
 }
 
+$('busy-stop').onclick = () => { S.calcStop = true; $('busy-sub').textContent = '止めている…（今の分を保存してから止まる）'; };
+
 // 駅の下書き（駅が空で住所がある施設）
 $('fac-draft').onclick = async () => {
   // 駅が空の施設と、まだ「駅は下書き」のままの施設（先生が直した駅は触らない）
   const todo = Object.keys(S.facilities).filter(fid => (!S.facilities[fid].station || S.facilities[fid].draft) && S.facilities[fid].address);
   if (!todo.length) return toast('駅が空・下書きのままの施設は無い');
   if (!confirm(`${todo.length}施設の最寄り（施設から歩いて一番近い駅・バス停・電停）を下書きする（駅が空の施設と「駅は下書き」のままの施設。先生が直した駅は触らない）`)) return;
-  busy(true, '駅を探している…');
-  let ok = 0; const errs = {}; const okayama = [];
+  let ok = 0; const errs = {}; const okayama = []; S.calcStop = false;
+  const nm = fid => S.facilities[fid].name || fid;
+  const show = (i, sub) => prog('駅の下書き', i, todo.length, `できた ${ok}・できなかった ${i - ok}　${sub}`, `${i} / ${todo.length}施設`);
   try {
-    for (let i = 0; i < todo.length; i += 5) {   // 1件で地図に10回あまり聞く＝GASの6分に収まるよう5件ずつ
+    for (let i = 0; i < todo.length && !S.calcStop; i += 5) {   // 1件で地図に10回あまり聞く＝GASの6分に収まるよう5件ずつ
       const part = todo.slice(i, i + 5);
+      show(i, `いま：${part.map(nm).join('、')}の場所を調べている`);
       const geos = await gas('geo', part.map(fid => ({ address: S.facilities[fid].address })));
       const jobs = [];
       for (let k = 0; k < part.length; k++) {
+        show(i, `いま：${nm(part[k])}の近くの駅・バス停を探している`);
         const here = geos[k] && geos[k].lat != null ? geos[k] : null;
         const cands = here ? await osmStops(here) : [];
         jobs.push({ address: S.facilities[part[k]].address, arrive: startOf(part[k]), here, cands });
       }
+      show(i, `いま：${part.map(nm).join('、')}の駅までの道を調べている`);
       const res = await gas('station', jobs);
       const up = {};
       part.forEach((fid, k) => {
@@ -426,13 +445,13 @@ $('fac-draft').onclick = async () => {
           [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: r.walk ?? null, [`facilities/${fid}/bike`]: r.bike ?? null, [`facilities/${fid}/access`]: null });
       });
       await db.ref().update(up);
-      busy(true, `駅を探している… ${Math.min(i + 5, todo.length)}/${todo.length}`);
+      show(Math.min(i + 5, todo.length), '');
     }
-    const ng = Object.keys(errs);
+    const ng = Object.keys(errs), stopped = S.calcStop ? `止めた（残り ${todo.length - ok - Object.values(errs).flat().length}件は、もう一度押せば続きから）\n` : '';
     const oka = okayama.length ? `\n\n岡山駅から歩きの経路しか出なかった ${okayama.length}件（駅は「岡山」で入れた・確かめる）：${okayama.join('、')}` : '';
-    if (ng.length || oka) {
+    if (ng.length || oka || stopped) {
       busy(false);
-      alert(`下書きできた ${ok}件／できなかった ${todo.length - ok}件` + oka + (ng.length ? '\n\n' : '') + ng.map(m => `【${m}】${errs[m].length}件：${errs[m].slice(0, 5).join('、')}${errs[m].length > 5 ? ' ほか' : ''}`).join('\n'));
+      alert(stopped + `下書きできた ${ok}件／できなかった ${todo.length - ok}件` + oka + (ng.length ? '\n\n' : '') + ng.map(m => `【${m}】${errs[m].length}件：${errs[m].slice(0, 5).join('、')}${errs[m].length > 5 ? ' ほか' : ''}`).join('\n'));
     } else toast(`下書きした ${ok}件（駅・バス停・電停）。「駅は下書き」の印の施設を確かめて直す`);
   } catch (e) { fail(e); }
   busy(false);
@@ -661,38 +680,53 @@ $('calc-run').onclick = async () => {
 // 車で直接の学生は、同じ住所で車通勤可の施設の車の時間も出す
 const doorFacs = sid => Object.keys(S.facilities).filter(fid => S.facilities[fid].address && TYPES.some(t => ((students()[sid] || {}).t || {})[t] && num(((yFac(fid).cap) || {})[t]) > 0));
 const carFacs = sid => doorFacs(sid).filter(fid => S.facilities[fid].carOk);
+// 学生1人の住所からの進み具合（施設の数で数える。経路なしも「済み」に入れる）
+function addrState(sid) {
+  const s = students()[sid], fs = doorFacs(sid), D = (Y().door || {})[sid] || {};
+  const ok = fs.filter(fid => D[fid] && D[fid].min != null).length, ng = fs.filter(fid => D[fid] && D[fid].err).length;
+  const cn = s.carDirect ? carFacs(sid).length : 0, cd = s.carDirect ? Object.keys(((Y().car || {})[sid]) || {}).length : 0;
+  return { all: fs.length, ok, ng, cn, cd, st: !fs.length ? 'none' : ok + ng >= fs.length ? 'done' : ok + ng ? 'part' : 'todo' };
+}
 function renderCar() {
   const box = $('car-box');
   if (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return; // 入力中は描き直さない
   const sids = Object.keys(students()).filter(sid => TYPES.some(t => (students()[sid].t || {})[t])).sort();
-  if (!sids.length) { box.innerHTML = '<div class="hint" style="margin:0">この年度の実習のある学生がいない。</div>'; return; }
-  box.innerHTML = sids.map(sid => {
-    const s = students()[sid], fs = doorFacs(sid), D = (Y().door || {})[sid] || {};
-    const ok = fs.filter(fid => D[fid] && D[fid].min != null).length, ng = fs.filter(fid => D[fid] && D[fid].err).length;
-    const car = s.carDirect ? `・車 ${Object.keys(((Y().car || {})[sid]) || {}).length}/${carFacs(sid).length}` : '';
-    return `<div class="car-row" data-sid="${esc(sid)}"><span class="nm">${esc(s.name)}</span>
+  if (!sids.length) { $('car-sum').innerHTML = ''; box.innerHTML = '<div class="hint" style="margin:0">この年度の実習のある学生がいない。</div>'; return; }
+  const sts = sids.map(addrState), cnt = k => sts.filter(x => x.st === k).length;
+  const fAll = sts.reduce((a, x) => a + x.all, 0), fDone = sts.reduce((a, x) => a + x.ok + x.ng, 0);
+  $('car-sum').innerHTML = `<div class="row" style="gap:6px"><b>住所から出した学生 ${cnt('done')} / ${sids.length}人</b>
+    <span class="tag grn">済み ${cnt('done')}</span><span class="tag yel">途中 ${cnt('part')}</span><span class="tag">まだ ${cnt('todo')}</span>
+    <span class="hint" style="margin:0 0 0 6px">施設ごとの計算 ${fDone} / ${fAll}件</span></div>
+    <div class="meter"><i class="g" style="width:${fAll ? fDone / fAll * 100 : 0}%"></i></div>`;
+  box.innerHTML = sids.map((sid, n) => {
+    const s = students()[sid], a = sts[n];
+    const tag = S.addrNow === sid ? '<span class="tag blu">計算中</span>' : a.st === 'done' ? '<span class="tag grn">済み</span>' : a.st === 'part' ? '<span class="tag yel">途中</span>' : a.st === 'none' ? '<span class="tag">施設なし</span>' : '<span class="tag">まだ</span>';
+    const pct = a.all ? (a.ok + a.ng) / a.all * 100 : 0;
+    return `<div class="car-row ${a.st}${S.addrNow === sid ? ' now' : ''}" data-sid="${esc(sid)}"><span class="nm">${esc(s.name)}</span>
       <input type="text" autocomplete="off" placeholder="住所（保存しない）"><button class="small">計算</button>
-      <span class="hint" style="margin:0">電車・バス ${ok}/${fs.length}${ng ? `（経路なし ${ng}）` : ''}${car}</span></div>`;
+      <span class="st">${tag}</span><span class="meter sm"><i class="g" style="width:${a.all ? a.ok / a.all * 100 : 0}%"></i><i class="r" style="width:${a.all ? a.ng / a.all * 100 : 0}%"></i></span>
+      <span class="hint" style="margin:0">電車・バス ${a.ok + a.ng}/${a.all}${a.ng ? `（うち経路なし ${a.ng}）` : ''}${s.carDirect ? `・車 ${a.cd}/${a.cn}` : ''}</span></div>`;
   }).join('');
 }
 // 1人分。skipDone＝もう出ている施設は飛ばす（まとめて貼り付けの続きから用）
-async function runAddr(sid, from, skipDone) {
+async function runAddr(sid, from, skipDone, step) {
   const s = students()[sid]; if (!s) return 0;
   const D = (Y().door || {})[sid] || {}, C = (Y().car || {})[sid] || {};
   const fs = doorFacs(sid).filter(fid => !skipDone || !(D[fid] && D[fid].min != null));
   const cs = s.carDirect ? carFacs(sid).filter(fid => !skipDone || C[fid] == null) : [];
-  let n = 0;
+  let n = 0; step = step || (() => {});
+  step(0, fs.length + cs.length);
   for (let i = 0; i < fs.length && !S.calcStop; i += 10) {
     const part = fs.slice(i, i + 10), up = {};
     const res = await gas('door', part.map(fid => ({ from, to: S.facilities[fid].address, arrive: doorArrive(fid) })));
     part.forEach((fid, k) => { const r = res[k] || { err: '応答なし' }; up[ypath(`door/${sid}/${fid}`)] = { ...r, arrive: doorArrive(fid), at: now() }; n++; });
-    await db.ref().update(up);
+    await db.ref().update(up); step(part.length, fs.length + cs.length); renderCar();
   }
   for (let i = 0; i < cs.length && !S.calcStop; i += 10) {
     const part = cs.slice(i, i + 10), up = {};
     const res = await gas('car', part.map(fid => ({ from, to: S.facilities[fid].address, arrive: startOf(fid) })));
     part.forEach((fid, k) => { if (res[k] && res[k].car != null) up[ypath(`car/${sid}/${fid}`)] = res[k].car; });
-    await db.ref().update(up);
+    await db.ref().update(up); step(part.length, fs.length + cs.length); renderCar();
   }
   return n;
 }
@@ -700,9 +734,13 @@ $('car-box').onclick = async e => {
   const b = e.target.closest('button'); if (!b) return;
   const row = b.closest('.car-row'), sid = row.dataset.sid, inp = row.querySelector('input');
   const from = inp.value.trim(); if (!from) return toast('住所を入れる');
-  busy(true, `${students()[sid].name}：住所から計算中…`); S.calcStop = false;
-  try { await runAddr(sid, from, false); inp.value = ''; toast('保存した（住所は消した）'); } catch (err) { fail(err); }
-  busy(false); renderCar();
+  S.calcStop = false; S.addrNow = sid; inp.value = ''; renderCar(); let d = 0;
+  const nm = students()[sid].name;
+  try {
+    await runAddr(sid, from, false, (k, all) => { d += k; prog('住所から計算', d, all, `${nm}：施設ごとに経路を調べている`, `${d} / ${all}施設`); });
+    toast(S.calcStop ? '止めた（ここまで保存した・住所は消した）' : '保存した（住所は消した）');
+  } catch (err) { fail(err); }
+  S.addrNow = null; busy(false); renderCar();
 };
 // Excel から貼った表を読む（タブ区切り・セルの中の改行は "…" で囲まれて来る）。タブが無ければカンマ
 function readSheet(raw) {
@@ -770,15 +808,18 @@ $('addr-paste').onclick = () => openPaste('住所をまとめて貼り付け（�
     list = pairs; miss = [];
   }
   if (!list.length) return toast('住所が読めない');
-  S.calcStop = false; let n = 0;
+  S.calcStop = false; let n = 0, i = 0;
   try {
-    for (let i = 0; i < list.length && !S.calcStop; i++) {
-      busy(true, `住所から計算中… ${i + 1}/${list.length}人（${students()[list[i].sid].name}）`);
-      n += await runAddr(list[i].sid, list[i].from, true);
+    for (; i < list.length && !S.calcStop; i++) {
+      const nm = students()[list[i].sid].name; S.addrNow = list[i].sid; renderCar(); let d = 0;
+      n += await runAddr(list[i].sid, list[i].from, true, (k, all) => {
+        d += k;
+        prog('住所から計算（まとめて）', i + (all ? d / all : 1), list.length, `${i + 1}人目：${nm}（施設 ${d}/${all}）`, `${i} / ${list.length}人`);
+      });
     }
   } catch (err) { fail(err); }
-  busy(false); renderCar();
-  alert(`${list.length}人・${n}件を計算した（住所は残していない）` + (miss.length ? `\n\n学生が決まらなかった行（学籍番号・名前が合わない）：\n${miss.map(m => m.row.slice(0, 40)).join('\n')}` : ''));
+  S.addrNow = null; busy(false); renderCar();
+  alert((S.calcStop ? `止めた（${i}/${list.length}人目まで。同じ物を貼り直せば続きから）\n` : '') + `${list.length}人のうち${i}人・${n}件を計算した（住所は残していない）` + (miss.length ? `\n\n学生が決まらなかった行（学籍番号・名前が合わない）：\n${miss.map(m => m.row.slice(0, 40)).join('\n')}` : ''));
 });
 
 // ===== 4. 割り振り =====
