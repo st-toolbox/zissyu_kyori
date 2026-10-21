@@ -141,8 +141,8 @@ function station_(j) {
       .setOrigin(here.lat + ',' + here.lng).setDestination(c.lat + ',' + c.lng)
       .setMode(Maps.DirectionFinder.Mode.WALKING).setLanguage('ja').getDirections();
     if (!res.routes || !res.routes.length) return;
-    const walk = Math.round(res.routes[0].legs[0].duration.value / 60);
-    if (!best || walk < best.walk) best = { station: c.name.replace(/駅$/, ''), kind: c.kind, loc: c.lat + ',' + c.lng, walk: walk };
+    const leg = res.routes[0].legs[0], walk = Math.round(leg.duration.value / 60), m = leg.distance.value;
+    if (!best || walk < best.walk) best = { station: c.name.replace(/駅$/, ''), kind: c.kind, loc: c.lat + ',' + c.lng, walk: walk, meters: m, bike: Math.max(1, Math.ceil(m / 250)) };
   });
   return best || { err: '徒歩の経路が出ない' };
 }

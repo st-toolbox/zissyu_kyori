@@ -395,7 +395,7 @@ $('fac-draft').onclick = async () => {
         if (r.walkOnly) okayama.push(S.facilities[fid].name || fid);
         if (r.station) ok++; else { const m = r.err || '返事なし'; (errs[m] = errs[m] || []).push(S.facilities[fid].name || fid); }
         if (r.station) Object.assign(up, { [`facilities/${fid}/station`]: r.station, [`facilities/${fid}/stopKind`]: r.kind || null, [`facilities/${fid}/stopLoc`]: r.loc || null,
-          [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: null, [`facilities/${fid}/bike`]: null, [`facilities/${fid}/access`]: null });
+          [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: r.walk ?? null, [`facilities/${fid}/bike`]: r.bike ?? null, [`facilities/${fid}/access`]: null });
       });
       await db.ref().update(up);
       busy(true, `駅を探している… ${Math.min(i + 5, todo.length)}/${todo.length}`);
