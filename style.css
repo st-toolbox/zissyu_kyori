@@ -110,6 +110,11 @@ dialog .grid > input[type=text] { width: 100%; }
 dialog .foot { display: flex; gap: 8px; margin-top: 16px; }
 .rmap { height: 280px; margin-top: 8px; border: 1px solid var(--line); }
 @media print { .rmap { display: none; } }
+.rpin { display: flex; align-items: center; gap: 4px; pointer-events: none; }
+.rpin i { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 2px solid #1d2422; flex: none; }
+.rpin span { font-size: 11px; background: rgba(255,255,255,.88); padding: 0 3px; white-space: nowrap; transform: translateX(2px); }
+.rpin.fac i { width: 14px; height: 14px; background: #b3261e; border-color: #fff; box-shadow: 0 0 0 1px #b3261e; }
+.rpin.fac span { font-size: 12px; font-weight: bold; color: #b3261e; }
 .dt td:first-child { color: var(--sub); width: 130px; }
 
 #busy { position: fixed; inset: 0; background: rgba(255,255,255,.6); display: none; align-items: center; justify-content: center; z-index: 50; font-weight: 500; }

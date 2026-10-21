@@ -442,7 +442,7 @@ $('fac-draft').onclick = async () => {
         if (r.walkOnly) okayama.push(S.facilities[fid].name || fid);
         if (r.station) ok++; else { const m = r.err || '返事なし'; (errs[m] = errs[m] || []).push(S.facilities[fid].name || fid); }
         if (r.station) Object.assign(up, { [`facilities/${fid}/station`]: r.station, [`facilities/${fid}/stopKind`]: r.kind || null, [`facilities/${fid}/stopLoc`]: r.loc || null,
-          [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: r.walk ?? null, [`facilities/${fid}/bike`]: r.bike ?? null, [`facilities/${fid}/access`]: null });
+          [`facilities/${fid}/loc`]: geos[k] && geos[k].lat != null ? geos[k].lat + ',' + geos[k].lng : null, [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: r.walk ?? null, [`facilities/${fid}/bike`]: r.bike ?? null, [`facilities/${fid}/access`]: null });
       });
       await db.ref().update(up);
       show(Math.min(i + 5, todo.length), '');
@@ -1022,7 +1022,7 @@ function openDetail(sid, fid) {
   }
   if (ev.prop != null) h += `<p class="prop" style="color:var(--ok)">駅に自転車を置けば 約${ev.prop}分（③を自転車${f.bike}分にした目安）</p>`;
   $('detail-body').innerHTML = h; $('dlg-detail').showModal();
-  document.querySelectorAll('#detail-body .rmap').forEach(el => drawRoute(el, ev.opts[+el.dataset.i], f));
+  document.querySelectorAll('#detail-body .rmap').forEach(el => drawRoute(el, ev.opts[+el.dataset.i], f, fid));
 }
 // Google の折れ線（encoded polyline）を緯度経度の並びに戻す
 function unpoly(str) {
@@ -1038,24 +1038,43 @@ function unpoly(str) {
   }
   return pts;
 }
-// 大まかな経路を地図に描く：電車・バスは色の実線、歩きは点線。乗る所・降りる所に名前（家から乗る所までの線は持っていない）
-function drawRoute(el, o, f) {
-  const segs = o.k === '住所から' ? (o.d.poly || []) : (o.r.poly || []).concat(o.r.poly && f.walkPoly && (f.access || '徒歩') === '徒歩' ? [{ m: 'W', p: f.walkPoly }] : []);
-  if (!segs.length || !window.L) { el.outerHTML = `<div class="hint" style="margin:6px 0 0">${window.L ? '地図の線が無い（地図の機能より前に計算した）。3. 計算の表でこのマスを押して「上書き」でやり直すと出る。' : '地図を読み込めなかった（ネットにつながっているか）。'}</div>`; return; }
-  const map = L.map(el, { scrollWheelZoom: false });
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
-  const all = [], dot = { radius: 5, color: '#1d2422', fillColor: '#fff', fillOpacity: 1, weight: 2 };
+// 大まかな経路を地図に描く（就職マップと同じ地図）：電車・バスは色の実線、歩きは点線。乗る所・降りる所に名前（家から乗る所までの線は持っていない）
+async function drawRoute(el, o, f, fid) {
+  const walkOk = (f.access || '徒歩') === '徒歩';
+  const segs = o.k === '住所から' ? (o.d.poly || []) : (o.r.poly || []).concat(o.r.poly && f.walkPoly && walkOk ? [{ m: 'W', p: f.walkPoly }] : []);
+  if (!segs.length || !window.maplibregl) { el.outerHTML = `<div class="hint" style="margin:6px 0 0">${window.maplibregl ? '地図の線が無い（地図の機能より前に計算した）。3. 計算の表でこのマスを押して「上書き」でやり直すと出る。' : '地図を読み込めなかった（ネットにつながっているか）。'}</div>`; return; }
+  // 施設の場所（前の計算では持っていない＝1回だけ調べて残す。施設の住所なので残してよい）
+  if (!f.loc && f.address && S.settings.gasUrl) {
+    try { const g = (await gas('geo', [{ address: f.address }]))[0]; if (g && g.lat != null) { f.loc = g.lat + ',' + g.lng; db.ref(`facilities/${fid}/loc`).set(f.loc); } } catch (e) { }
+  }
+  const ll = p => [p[1], p[0]], feats = [], stops = [], all = [];
   segs.forEach(sg => {
-    const pts = sg.p ? unpoly(sg.p) : []; if (!pts.length) return; all.push(...pts);
-    if (sg.m === 'T') {
-      L.polyline(pts, { color: sg.c || '#1F4D45', weight: 5, opacity: .85 }).addTo(map).bindTooltip(sg.t || '');
-      L.circleMarker(pts[0], dot).addTo(map).bindTooltip(`${sg.a}（${sg.t}に乗る）`);
-      L.circleMarker(pts[pts.length - 1], dot).addTo(map).bindTooltip(`${sg.b}（降りる）`);
-    } else L.polyline(pts, { color: '#5d6b67', weight: 3, dashArray: '4 6' }).addTo(map);
+    const pts = sg.p ? unpoly(sg.p).map(ll) : []; if (!pts.length) return; all.push(...pts);
+    feats.push({ type: 'Feature', properties: { T: sg.m === 'T' ? 1 : 0, c: sg.c || '#1F4D45' }, geometry: { type: 'LineString', coordinates: pts } });
+    if (sg.m === 'T') stops.push([pts[0], `${sg.a}（${sg.t}に乗る）`], [pts[pts.length - 1], `${sg.b}（降りる）`]);
   });
   if (!all.length) return;
-  L.circleMarker(all[all.length - 1], { radius: 7, color: '#b3261e', fillColor: '#b3261e', fillOpacity: 1 }).addTo(map).bindTooltip(f.name, { permanent: true, direction: 'top' });
-  setTimeout(() => { map.invalidateSize(); map.fitBounds(all, { padding: [24, 24] }); }, 60);
+  const end = all[all.length - 1], fp = f.loc ? f.loc.split(',').map(Number).reverse() : null;
+  // 降りた所から施設までの歩きの線が無いとき（駅からの経路）は、施設までまっすぐ点線
+  if (fp && Math.hypot((fp[0] - end[0]) * Math.cos(end[1] * Math.PI / 180), fp[1] - end[1]) > 0.0004) {
+    feats.push({ type: 'Feature', properties: { T: 0, c: '' }, geometry: { type: 'LineString', coordinates: [end, fp] } }); all.push(fp);
+  }
+  const map = new maplibregl.Map({ container: el, style: 'mapstyle.json', bounds: boundsOf(all), fitBoundsOptions: { padding: 30 }, scrollZoom: false, attributionControl: { compact: true } });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }));
+  setTimeout(() => { map.resize(); map.fitBounds(boundsOf(all), { padding: 30, duration: 0 }); const a = el.querySelector('.maplibregl-compact-show'); if (a) a.classList.remove('maplibregl-compact-show'); }, 60);   // ダイアログが開ききってから大きさを測り直す
+  map.on('load', () => {
+    map.addSource('rt', { type: 'geojson', data: { type: 'FeatureCollection', features: feats } });
+    map.addLayer({ id: 'rt-w', type: 'line', source: 'rt', filter: ['==', ['get', 'T'], 0], paint: { 'line-color': '#5d6b67', 'line-width': 3, 'line-dasharray': [1, 2] } });
+    map.addLayer({ id: 'rt-t', type: 'line', source: 'rt', filter: ['==', ['get', 'T'], 1], layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['get', 'c'], 'line-width': 5, 'line-opacity': .85 } });
+  });
+  stops.forEach(([p, t]) => new maplibregl.Marker({ element: pin('rpin', t), anchor: 'left', offset: [-7, 0] }).setLngLat(p).addTo(map));
+  new maplibregl.Marker({ anchor: 'left', offset: [-9, 0], element: pin('rpin fac', f.name + (fp ? '' : '（場所を調べられず・最寄りの停留所に置いた）')) }).setLngLat(fp || end).addTo(map);
+}
+function boundsOf(pts) {
+  const b = new maplibregl.LngLatBounds(pts[0], pts[0]); pts.forEach(p => b.extend(p)); return b;
+}
+function pin(cls, text) {
+  const d = document.createElement('div'); d.className = cls; d.innerHTML = `<i></i><span>${esc(text)}</span>`; return d;
 }
 $('detail-close').onclick = () => $('dlg-detail').close();
 

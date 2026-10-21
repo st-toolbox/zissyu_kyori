@@ -6,3 +6,4 @@ data/
 .env*
 *.json
 !database.rules.json
+!mapstyle.json
