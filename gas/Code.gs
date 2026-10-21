@@ -121,7 +121,7 @@ function car_(j) {
 function station_(j) {
   const res = Maps.newDirectionFinder()
     .setOrigin(place_(j.address)).setDestination(place_('岡山駅'))
-    .setMode(Maps.DirectionFinder.Mode.TRANSIT).setTransitMode(Maps.DirectionFinder.TransitMode.RAIL)
+    .setMode(Maps.DirectionFinder.Mode.TRANSIT)   // Apps Script には電車だけに絞る指定が無い＝バスは下で読み飛ばす
     .setDepart(weekday_('08:00')).setLanguage('ja').getDirections();
   if (!res.routes || !res.routes.length) return { err: '駅が見つからない' };
   const steps = res.routes[0].legs[0].steps;
