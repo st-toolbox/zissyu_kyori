@@ -275,14 +275,24 @@ $('fac-paste').onclick = () => openPaste('施設を表から貼り付け', '列�
 });
 const yes = v => /^(○|〇|1|可|はい|有|yes|y|true|✓)$/i.test(String(v).trim());
 
-// 古い控え（旧アプリの JSON）から施設だけ取り込む。学生・住所・計算結果は読まずに捨てる
-$('fac-import').onclick = () => $('fac-file').click();
+// 旧アプリの施設を取り込む。まずデータベースに残っている /locations（先生だけ読める）を読み、
+// 読めなければ控えの JSON を選ばせる。学生・住所・計算結果は読まない
+$('fac-import').onclick = async () => {
+  let locs = null;
+  try { locs = (await db.ref('locations').once('value')).val(); } catch (_) { }
+  if (locs) return importLocs(locs);
+  if (confirm('データベースに旧アプリの施設が見当たらない（または読めない）。控えの JSON から取り込む？')) $('fac-file').click();
+};
 $('fac-file').onchange = async e => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
   let j; try { j = JSON.parse(await file.text()); } catch (_) { return alert('JSON として読めなかった'); }
   const locs = j.locations || (j.zissyu && j.zissyu.locations);
+  j = null;  // 学生の行はここで手放す
   if (!locs) return alert('この控えに施設（locations）が見当たらない');
+  importLocs(locs);
+};
+async function importLocs(locs) {
   const groups = {};
   Object.values(locs).forEach(l => {
     if (!l || !l.name) return;
@@ -290,7 +300,6 @@ $('fac-file').onchange = async e => {
     TYPES.forEach(t => { if (String(l.type || '').includes(t)) g.cap[t]++; });
     if (l.isPediatric) g.pediatric = true;
   });
-  j = null;  // 学生の行はここで手放す
   const list = Object.values(groups);
   if (!confirm(`施設 ${list.length}件を取り込む。\n（同じ名前の施設は住所・小児だけ上書き。受入人数と始業は${S.year}年度に入れる）\n学生・住所・計算結果は読まずに捨てる。`)) return;
   const byName = {}; Object.entries(S.facilities).forEach(([k, f]) => byName[f.name] = k);
@@ -303,7 +312,7 @@ $('fac-file').onchange = async e => {
   });
   await db.ref().update(up).catch(fail);
   toast(list.length + '施設を取り込んだ。次は「駅の下書きを出す」');
-};
+}
 function normTime(t) { const m = String(t || '').match(/(\d{1,2})[:：時](\d{2})?/); return m ? String(+m[1]).padStart(2, '0') + ':' + (m[2] || '00') : ''; }
 
 // 駅の下書き（駅が空で住所がある施設）

@@ -28,6 +28,10 @@
       ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
       ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()"
     },
+    "locations": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists() && !newData.exists()"
+    },
     "years": {
       ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
       ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()"
