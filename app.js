@@ -140,7 +140,7 @@ function render() {
   if (!S.year) return;
   document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === S.view));
   document.querySelectorAll('main > section').forEach(s => s.classList.toggle('on', s.id === 'v-' + S.view));
-  ({ fac: renderFac, stu: renderStu, calc: renderCalc, asg: renderAsg, prt: () => {}, tch: renderTch, set: renderSet })[S.view]();
+  ({ fac: renderFac, stu: renderStu, calc: renderCalc, asg: renderAsg, prt: renderPrt, tch: renderTch, set: renderSet })[S.view]();
 }
 
 // ===== 計算のもと =====
@@ -627,6 +627,32 @@ $('prt-form').onclick = async () => {
     await navigator.clipboard.writeText(src);
     toast('フォームを作るスクリプトをコピーした。下の手順で貼って動かす');
   } catch (e) { fail(e); }
+};
+// フォームの3つのリンク（年度ごと・years/<年度>/form）
+const FORM_LINKS = [['pub', '学生に配る URL'], ['edit', 'フォームを直す URL'], ['sheet', '回答の表']];
+function renderPrt() {
+  const f = Y().form || {};
+  $('form-links').innerHTML = FORM_LINKS.map(([k, l]) => `<div class="row"><label style="min-width:9em">${l}</label>
+    <input id="fl-${k}" type="url" style="flex:1;min-width:16em" value="${esc(f[k] || '')}" placeholder="https://...">
+    <button data-fl-open="${k}">開く</button><button data-fl-copy="${k}">コピー</button></div>`).join('');
+  document.querySelectorAll('[data-fl-open]').forEach(b => b.onclick = () => {
+    const u = $('fl-' + b.dataset.flOpen).value.trim();
+    if (/^https:\/\//.test(u)) window.open(u, '_blank', 'noopener'); else toast('URL が入っていない');
+  });
+  document.querySelectorAll('[data-fl-copy]').forEach(b => b.onclick = async () => {
+    const u = $('fl-' + b.dataset.flCopy).value.trim();
+    if (!u) return toast('URL が入っていない');
+    try { await navigator.clipboard.writeText(u); toast('コピーした'); } catch (e) { fail(e); }
+  });
+}
+$('form-links-save').onclick = async () => {
+  const v = {};
+  for (const [k, l] of FORM_LINKS) {
+    const u = $('fl-' + k).value.trim();
+    if (u && !/^https:\/\/(docs\.google\.com|forms\.gle)\//.test(u)) return toast(`${l} が Google の URL でない`);
+    v[k] = u || null;
+  }
+  try { await db.ref(ypath('form')).update(v); toast(`${S.year}年度のフォームのリンクを保存した`); } catch (e) { fail(e); }
 };
 
 // 貼り付けの共通
