@@ -6,7 +6,7 @@
 <title>実習配置アプリ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261021k">
+<link rel="stylesheet" href="style.css?v=20261021l">
 </head>
 <body>
 
@@ -67,19 +67,16 @@
     <!-- 計算 -->
     <section id="v-calc">
       <h1>計算</h1>
-      <p class="hint">まだ計算していない「駅→駅」だけを Google Maps に聞く。同じ駅の学生が何人いても1回。結果は年度をまたいで使い回す。途中で止めても、次に押せば続きから。</p>
-      <div class="box" id="calc-summary"></div>
+      <p class="hint">1回の計算で全部出す：施設の駅からの徒歩 → 駅→駅の電車・バス（ふだん・実家） → 住所から（住所を読み込んだ学生） → 車（車で直接の学生）。同じ駅の組は何人いても1回・結果は年度をまたいで使い回す。途中で止めても「まだの分を計算」で続きから。<br>
+        表の<b>施設名</b>を押すとその施設、<b>学生名</b>を押すとその学生（住所もそこで入れられる）、<b>マス</b>を押すとその1件だけやり直せる。</p>
       <div class="box">
-        <div class="row"><button class="primary" id="calc-run">計算する</button><button id="calc-stop" disabled>止める</button>
-          <button id="calc-retry">経路なしだった分をやり直す</button></div>
-        <div class="bar"><div id="calc-bar"></div></div>
-        <div id="calc-msg" class="hint"></div>
+        <div class="sum" id="calc-sum"></div>
+        <div class="row"><button id="addr-paste">住所を読み込む（保存しない）</button><span style="flex:1"></span>
+          <button class="primary" id="calc-todo">まだの分を計算</button><button id="calc-ng">経路なしだけやり直す</button><button id="calc-all">上書きで全部やり直す</button></div>
       </div>
-      <h2>住所から計算（最終）</h2>
-      <p class="hint">家の住所→施設の住所を、始業−ゆとりに着く電車・バスで Google Maps に聞く。出た学生は、ふだんの駅の見積もりの代わりにこの分数で割り振る。住所はここに入れて計算するだけで<b>保存しない</b>（画面を離れると消える）。保存するのは施設ごとの分数と乗る路線だけ。「車で直接」の学生は、同じ住所で車通勤可の施設の車の時間も出す。</p>
-      <div class="row" style="margin-bottom:8px"><button id="addr-paste">住所をまとめて貼り付け</button></div>
-      <div class="sum" id="car-sum"></div>
-      <div class="box" id="car-box"></div>
+      <div class="tabs" id="calc-tabs"></div>
+      <div class="hint" style="margin:0 0 6px">マスの見方：◎○△×宿＋片道の分数（<i>住</i>＝住所から・<i>車</i>＝車）／<span class="c-todo cgk">·</span>まだ／<span class="c-ng cgk">経路なし</span>／<span class="c-todo cgk"><span class="old">48</span></span>＝住所を読み込んだので出し直し待ち（灰色は前の見積もり）</div>
+      <div class="tablewrap cgwrap"><table id="calc-grid" class="cgrid"></table></div>
     </section>
 
     <!-- 割り振り -->
@@ -197,6 +194,13 @@
   <div class="foot"><button value="cancel">やめる</button><button class="primary" value="ok">取り込む</button></div>
 </form></dialog>
 
+<dialog id="dlg-scope"><form method="dialog">
+  <h2 style="margin-top:0" id="scope-title"></h2>
+  <p class="hint" id="scope-info"></p>
+  <div id="scope-addr-row" class="grid"><label>住所（保存しない）</label><input type="text" id="scope-addr" autocomplete="off" placeholder="入れると住所から出す。空なら駅の見積もり"></div>
+  <div class="foot"><button class="primary" value="todo">まだの分を計算</button><button value="ng">経路なしだけやり直す</button><button value="all">上書きでやり直す</button><span style="flex:1"></span><button value="cancel">やめる</button></div>
+</form></dialog>
+
 <!-- 詳細 -->
 <dialog id="dlg-detail"><div id="detail-body"></div><div class="foot"><button type="button" id="detail-close">閉じる</button></div></dialog>
 
@@ -209,6 +213,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="app.js?v=20261021i"></script>
+<script src="app.js?v=20261021j"></script>
 </body>
 </html>

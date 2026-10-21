@@ -65,9 +65,6 @@ main > section.on { display: block; }
 /* 計算 */
 .bar { height: 10px; background: var(--main-l); border-radius: 5px; overflow: hidden; margin: 10px 0 4px; }
 .bar > div { height: 100%; background: var(--main); width: 0; transition: width .3s; }
-.car-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.car-row .nm { width: 160px; font-weight: 500; }
-.car-row input[type=text] { width: 320px; }
 
 /* 割り振り */
 .tabs { display: flex; gap: 4px; margin: 8px 0 10px; }
@@ -127,10 +124,25 @@ dialog .foot { display: flex; gap: 8px; margin-top: 16px; }
 .meter > i.y { background: #e0b04a; }
 .meter > i.r { background: var(--bad); }
 .meter.sm { width: 90px; margin: 0; flex: none; }
-.car-row .st { width: 64px; }
-.car-row .st .tag { margin-left: 0; }
-.car-row.now { background: #f2f7fb; }
-.car-row.done .nm { color: var(--sub); }
+/* 計算の表（学生×施設） */
+.cgwrap { max-height: 72vh; }
+.cgrid { width: auto; font-size: 12px; }
+.cgrid th, .cgrid td { padding: 3px 5px; border: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.cgrid th.cg-f { vertical-align: bottom; cursor: pointer; min-width: 40px; }
+.cgrid th.cg-f span { writing-mode: vertical-rl; display: block; max-height: 120px; overflow: hidden; margin: 0 auto; color: var(--ink); }
+.cgrid th.cg-nm { position: sticky; left: 0; z-index: 2; text-align: left; background: #fafbfa; cursor: pointer; color: var(--ink); min-width: 120px; }
+.cgrid thead th.cg-nm { z-index: 3; color: var(--sub); cursor: default; }
+.cgrid small { display: block; color: var(--sub); font-weight: 400; }
+.cgrid th.cg-nm small { display: inline; margin-left: 6px; }
+.cgrid th:hover, .cgrid td.cg:hover { outline: 2px solid var(--main); outline-offset: -2px; }
+td.cg { cursor: pointer; }
+td.cg b { margin-right: 2px; }
+td.cg i, .hint i { font-style: normal; font-size: 10px; color: var(--ok); margin-left: 1px; }
+.c-todo { background: #f4f5f4; color: var(--muted); }
+.c-ng { background: #fdf3f2; color: var(--bad); font-size: 11px; }
+.cgk { padding: 0 4px; border: 1px solid var(--line); }
+.old { color: #aab3b0; text-decoration: line-through; }
+#dlg-scope .grid { margin-top: 10px; }
 #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 8px 16px; border-radius: 4px; display: none; z-index: 60; }
 
 @media (max-width: 900px) {
