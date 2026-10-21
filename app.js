@@ -567,8 +567,9 @@ function openPaste(title, hint, onOk) {
   const d = $('dlg-paste'); d.returnValue = '';
   d.onclose = async () => {
     if (d.returnValue !== 'ok') return;
-    const rows = $('paste-text').value.split(/\r?\n/).filter(l => l.trim()).map(l => l.split(l.includes('\t') ? '\t' : ',').map(c => c.trim()));
-    try { await onOk(rows); } catch (e) { fail(e); }
+    const raw = $('paste-text').value;
+    const rows = raw.split(/\r?\n/).filter(l => l.trim()).map(l => l.split(l.includes('\t') ? '\t' : ',').map(c => c.trim()));
+    try { await onOk(rows, raw); } catch (e) { fail(e); }
   };
   d.showModal();
 }
@@ -703,10 +704,72 @@ $('car-box').onclick = async e => {
   try { await runAddr(sid, from, false); inp.value = ''; toast('保存した（住所は消した）'); } catch (err) { fail(err); }
   busy(false); renderCar();
 };
-$('addr-paste').onclick = () => openPaste('住所をまとめて貼り付け（保存しない）', '1行に「学籍番号［タブかカンマ］住所」。住所は計算に使うだけで保存しない（閉じると消える）。もう出ている施設は飛ばす＝途中で止まっても、同じ物を貼り直せば続きから。', async rows => {
-  const list = rows.filter(r => r[0] && r[1] && students()[fk(r[0])]).map(r => ({ sid: fk(r[0]), from: r.slice(1).join(' ').trim() }));
-  const miss = rows.filter(r => r[0] && r[0] !== '学籍番号' && !students()[fk(r[0])]).map(r => r[0]);
-  if (!list.length) return toast('学籍番号が合う行が無い');
+// Excel から貼った表を読む（タブ区切り・セルの中の改行は "…" で囲まれて来る）。タブが無ければカンマ
+function readSheet(raw) {
+  raw = String(raw || '').replace(/\r\n?/g, '\n');
+  const sep = raw.includes('\t') ? '\t' : ',', rows = [];
+  let row = [], cell = '', q = false;
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (q) { if (c === '"' && raw[i + 1] === '"') { cell += '"'; i++; } else if (c === '"') q = false; else cell += c; }
+    else if (c === '"' && !cell) q = true;
+    else if (c === sep) { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  row.push(cell); rows.push(row);
+  return rows.map(r => r.map(x => x.replace(/\s+/g, ' ').trim())).filter(r => r.some(x => x));
+}
+const nz = s => String(s || '').normalize('NFKC').replace(/\s+/g, '');
+const ADDR_RE = /[都道府県市区町村郡]|丁目|番地|[0-9]+-[0-9]+/;
+// 1行＝1人。学籍番号か名前の列で学生を決め、住所の列（いくつに分かれていてもつなぐ）で計算する
+// 学籍番号も名前も無い（住所だけの列）なら、学生一覧の順（学籍番号順）に1行ずつ当てる＝先に確かめる
+function readAddrRows(raw) {
+  const all = students(), sidOf = {}, byName = {};
+  Object.keys(all).forEach(sid => {
+    sidOf[nz(sid)] = sid;
+    const n = nz(all[sid].name); if (n) byName[n] = byName[n] === undefined ? sid : null;   // 同じ名前が2人なら名前では決めない
+  });
+  const who = c => sidOf[nz(c)] || sidOf[nz(fk(c))] || byName[nz(c)] || null;
+  let rows = readSheet(raw), cols = null;
+  // 見出し行があれば列を見出しで決める
+  const hi = rows.findIndex(r => r.some(c => /住所|所在地|都道府県|市区町村|番地/.test(c)) && !r.some(who) && !r.some(c => ADDR_RE.test(c) && /\d/.test(c)));
+  if (hi === 0) {
+    const h = rows[0];
+    cols = { id: h.findIndex(c => /学籍|番号|ID/i.test(c)), name: h.findIndex(c => /氏名|名前/.test(c) && !/ふりがな|フリガナ|カナ/.test(c)),
+      addr: h.map((c, k) => /住所|所在地|都道府県|市区町村|町名|番地|建物|方書/.test(c) && !/メール|mail/i.test(c) ? k : -1).filter(k => k >= 0) };
+    rows = rows.slice(1);
+  }
+  const out = [], miss = [];
+  for (const r of rows) {
+    let sid = null, addr = '';
+    if (cols) {
+      sid = (cols.id >= 0 && who(r[cols.id])) || (cols.name >= 0 && who(r[cols.name])) || r.map(who).find(x => x) || null;
+      addr = cols.addr.map(k => r[k] || '').join(' ').trim();
+    } else {
+      const k = r.findIndex(who); sid = k >= 0 ? who(r[k]) : null;
+      // 住所らしいセルから右へ、メール・電話・郵便番号でないセルをつなぐ（「岡山市北区…」「1-2-3」「○○マンション101」と分かれていても読む）
+      const rest = r.map((c, x) => ({ c, x })).filter(o => o.x !== k && o.c && !/@/.test(o.c) && !/^〒?\s*\d{3}-?\d{4}$/.test(o.c) && !/^[\d\-()（） ]{10,}$/.test(o.c) && !(sid && nz(o.c) === nz(all[sid].name)));
+      const a0 = rest.findIndex(o => ADDR_RE.test(o.c));
+      addr = (a0 >= 0 ? rest.slice(a0) : rest).map(o => o.c).join(' ').trim();
+    }
+    if (!addr) continue;
+    if (sid) out.push({ sid, from: addr }); else miss.push({ row: r.join(' '), from: addr });
+  }
+  return { out, miss };
+}
+$('addr-paste').onclick = () => openPaste('住所をまとめて貼り付け（保存しない）', 'Excel の表をそのまま貼る（1行＝1人・見出し行があってもよい）。学籍番号か名前の列で学生を決める。住所が「市区町村」「番地」「建物」に分かれていてもつなぐ。住所だけの列なら学籍番号の順に当てる（先に確かめる）。住所は計算に使うだけで保存しない。もう出ている施設は飛ばす＝途中で止まっても、同じ物を貼り直せば続きから。', async (rows, raw) => {
+  let { out: list, miss } = readAddrRows(raw);
+  if (!list.length && miss.length) {
+    // 住所だけ：学籍番号の順に当てる
+    const sids = Object.keys(students()).sort();
+    const n = Math.min(sids.length, miss.length);
+    const pairs = miss.slice(0, n).map((m, i) => ({ sid: sids[i], from: m.from }));
+    const show = pairs.map(p => `${p.sid} ${students()[p.sid].name || ''} ← ${p.from}`).join('\n');
+    if (!confirm(`学籍番号・名前の列が無いので、学籍番号の順に当てる。合っている？\n（住所 ${miss.length}行・学生 ${sids.length}人${miss.length !== sids.length ? '＝数が合っていない' : ''}）\n\n` + show)) return;
+    list = pairs; miss = [];
+  }
+  if (!list.length) return toast('住所が読めない');
   S.calcStop = false; let n = 0;
   try {
     for (let i = 0; i < list.length && !S.calcStop; i++) {
@@ -715,7 +778,7 @@ $('addr-paste').onclick = () => openPaste('住所をまとめて貼り付け（�
     }
   } catch (err) { fail(err); }
   busy(false); renderCar();
-  alert(`${list.length}人・${n}件を計算した（住所は残していない）` + (miss.length ? `\n\n学籍番号が見つからない行：${miss.join('、')}` : ''));
+  alert(`${list.length}人・${n}件を計算した（住所は残していない）` + (miss.length ? `\n\n学生が決まらなかった行（学籍番号・名前が合わない）：\n${miss.map(m => m.row.slice(0, 40)).join('\n')}` : ''));
 });
 
 // ===== 4. 割り振り =====
