@@ -586,7 +586,24 @@ const FORM_Q = { ts: 'タイムスタンプ', sid: '学籍番号', name: '名前
   min: '家を出てから乗るまでの分', car: '車で実習先まで直接通えますか', jkOk: '実家からの実習',
   jkSt: '実家の最寄りの駅・バス停の名前', jkKind: '実家の駅の種類', jkMode: '実家から駅までの手段', jkMin: '実家を出てから乗るまでの分' };
 const formKind = v => /バス/.test(v) ? 'バス' : /路面|電停/.test(v) ? '路面電車' : '電車';
-$('stu-form').onclick = () => openPaste('フォームの回答を貼り付け', '回答の表（スプレッドシート）を見出しの行ごと全部選んでコピーして貼る。同じ学籍番号は新しい回答で上書き。実習の種別（評価・総合・見学）はそのまま残す。', async rows => {
+$('stu-form').onclick = () => openPaste('フォームの回答を貼り付け', '回答の表（スプレッドシート）を見出しの行ごと全部選んでコピーして貼る。同じ学籍番号は新しい回答で上書き。実習の種別（評価・総合・見学）はそのまま残す。', importForm);
+// 回答の表を直接読む＝ログインに「表を読む」許可を足して Sheets API で1枚目を取る（5. 印刷で保存した回答の表）
+$('stu-form-sheet').onclick = async () => {
+  const id = (((Y().form || {}).sheet || '').match(/\/spreadsheets\/d\/([\w-]+)/) || [])[1];
+  if (!id) return toast(`${S.year}年度の「回答の表」の URL が無い＝5. 印刷のフォームの箱で保存する`);
+  try {
+    const pv = new firebase.auth.GoogleAuthProvider();
+    pv.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
+    const cred = await auth.currentUser.reauthenticateWithPopup(pv);
+    const r = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${id}/values/A:Z`, { headers: { Authorization: 'Bearer ' + cred.credential.accessToken } });
+    const j = await r.json();
+    if (!r.ok) return toast(r.status === 403 || r.status === 404
+      ? `回答の表を読めなかった（${r.status}）＝この先生のアカウントに表を共有する／Google Cloud で Sheets API を有効にする`
+      : '回答の表を読めなかった：' + ((j.error || {}).message || r.status));
+    await importForm((j.values || []).map(row => row.map(c => String(c).trim())));
+  } catch (e) { fail(e); }
+};
+async function importForm(rows) {
   const head = (rows[0] || []).map(c => c.trim()), col = {};
   for (const [k, t] of Object.entries(FORM_Q)) col[k] = head.indexOf(t);
   if (col.sid < 0 || col.st < 0) return alert('見出しの行が見つからない。1行目（タイムスタンプ・学籍番号…）からコピーして貼る');
@@ -620,7 +637,7 @@ $('stu-form').onclick = () => openPaste('フォームの回答を貼り付け', 
   toast(`${n}人の回答を取り込んだ${skip ? `（学籍番号が空の${skip}行は飛ばした）` : ''}${nNew ? `。実習の種別が未設定の学生が${nNew}人＝学生の画面で付ける` : ''}`);
   const k = await locateStops(Object.keys(seen));
   if (k) toast(`${n}人を取り込んだ。バス停・電停 ${k}件の場所を地図で読んだ（学生の画面で確かめられる）`);
-});
+}
 $('prt-form').onclick = async () => {
   try {
     const src = await (await fetch('gas/Form.gs', { cache: 'no-store' })).text();

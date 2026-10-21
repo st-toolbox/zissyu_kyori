@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
-<link rel="stylesheet" href="style.css?v=20261022b">
+<link rel="stylesheet" href="style.css?v=20261022c">
 </head>
 <body>
 
@@ -57,6 +57,7 @@
     <section id="v-stu">
       <div class="row"><h1>学生</h1><span class="spacer"></span>
         <button id="stu-add">学生を足す</button>
+        <button id="stu-form-sheet" class="primary">フォームの回答を取り込む</button>
         <button id="stu-form">フォームの回答を貼り付け</button>
         <button id="stu-paste">表から貼り付け</button>
         <button id="stu-tpl">貼り付け用の見本（CSV）</button>
@@ -117,7 +118,7 @@
           <li><b>学校のアカウント</b>で script.google.com を開く → 新しいプロジェクト → 中身を全部消して貼る</li>
           <li>上の関数の欄で「makeForm」を選んで ▶実行 → 許可する（初回だけ）</li>
           <li>下の実行ログに出る「学生に配る URL」を学生に送る（「回答の表」は先生が見る）</li>
-          <li>回答が集まったら、回答の表を見出しの行ごと全部コピー → 2. 学生 →「フォームの回答を貼り付け」</li>
+          <li>下の欄に3つの URL を貼って保存 → 回答が集まったら 2. 学生 →「フォームの回答を取り込む」（何度押してもよい・同じ学籍番号は新しい回答で上書き）。読めないときは回答の表を見出しの行ごとコピー →「フォームの回答を貼り付け」</li>
         </ol>
         <h3 style="margin:14px 0 4px">この年度のフォームのリンク</h3>
         <p class="hint">作ったら実行ログの3つを貼って保存する（年度ごとに残る）。</p>
@@ -231,6 +232,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
-<script src="app.js?v=20261022b"></script>
+<script src="app.js?v=20261022c"></script>
 </body>
 </html>
