@@ -337,6 +337,39 @@ async function importLocs(locs) {
 }
 function normTime(t) { const m = String(t || '').match(/(\d{1,2})[:：時](\d{2})?/); return m ? String(+m[1]).padStart(2, '0') + ':' + (m[2] || '00') : ''; }
 
+// OpenStreetMap（Overpass）から施設の近くの駅・バス停・電停（直線距離の近い順に4つ）。
+// 返事が来ないことがある＝8秒で諦めて空で返す（Google の候補だけで決まる）。2回続けて来なければその回はもう聞かない
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+let osmMiss = 0;
+async function osmStops(p) {
+  if (osmMiss >= 2) return [];
+  const a = `(around:1500,${p.lat},${p.lng})`;
+  const q = `[out:json][timeout:8];(nwr${a}[railway~"^(station|halt|tram_stop)$"];nwr${a}[highway=bus_stop];nwr${a}[public_transport=platform][bus=yes];);out center tags;`;
+  for (const url of OVERPASS) {
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(url, { method: 'POST', body: new URLSearchParams({ data: q }), signal: ctl.signal });
+      clearTimeout(t);
+      if (!r.ok) continue;
+      const d = await r.json(); osmMiss = 0;
+      const by = {};
+      (d.elements || []).forEach(e => {
+        const tg = e.tags || {}, name = tg['name:ja'] || tg.name;
+        const lat = e.lat != null ? e.lat : (e.center || {}).lat, lng = e.lon != null ? e.lon : (e.center || {}).lon;
+        if (!name || lat == null) return;
+        const kind = tg.railway === 'tram_stop' || tg.tram === 'yes' ? '路面電車'
+          : (tg.railway === 'station' || tg.railway === 'halt') ? (tg.station === 'subway' || tg.subway === 'yes' ? '地下鉄' : '電車') : 'バス';
+        const dx = (lng - p.lng) * Math.cos(p.lat * Math.PI / 180), dy = lat - p.lat, dist = dx * dx + dy * dy;
+        const key = kind + '|' + name;
+        if (!by[key] || dist < by[key].dist) by[key] = { name, kind, lat, lng, dist };
+      });
+      return Object.values(by).sort((x, y) => x.dist - y.dist).slice(0, 4).map(({ name, kind, lat, lng }) => ({ name, kind, lat, lng }));
+    } catch (_) {}
+  }
+  osmMiss++;
+  return [];
+}
+
 // 駅の下書き（駅が空で住所がある施設）
 $('fac-draft').onclick = async () => {
   // 駅が空の施設と、まだ「駅は下書き」のままの施設（先生が直した駅は触らない）
@@ -348,7 +381,14 @@ $('fac-draft').onclick = async () => {
   try {
     for (let i = 0; i < todo.length; i += 5) {   // 1件で地図に10回あまり聞く＝GASの6分に収まるよう5件ずつ
       const part = todo.slice(i, i + 5);
-      const res = await gas('station', part.map(fid => ({ address: S.facilities[fid].address, arrive: startOf(fid) })));
+      const geos = await gas('geo', part.map(fid => ({ address: S.facilities[fid].address })));
+      const jobs = [];
+      for (let k = 0; k < part.length; k++) {
+        const here = geos[k] && geos[k].lat != null ? geos[k] : null;
+        const cands = here ? await osmStops(here) : [];
+        jobs.push({ address: S.facilities[part[k]].address, arrive: startOf(part[k]), here, cands });
+      }
+      const res = await gas('station', jobs);
       const up = {};
       part.forEach((fid, k) => {
         const r = res[k] || {};

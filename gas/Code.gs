@@ -14,7 +14,7 @@ function doPost(e) {
   try { req = JSON.parse(e.postData.contents); } catch (_) { return out_({ status: 'ERROR', message: '形が違う' }); }
   if (!verifyTeacher_(req.idToken)) return out_({ status: 'ERROR', code: 'AUTH', message: '先生として確認できない（ログインし直す）' });
   const jobs = (req.jobs || []).slice(0, MAX_JOBS);
-  const fn = { transit: transit_, walk: walk_, car: car_, station: station_ }[req.action];
+  const fn = { transit: transit_, walk: walk_, car: car_, station: station_, geo: geo_ }[req.action];
   if (!fn) return out_({ status: 'ERROR', message: '知らない操作' });
   const results = jobs.map(j => { try { return fn(j); } catch (err) { return { err: String(err.message || err).slice(0, 100) }; } });
   return out_({ status: 'OK', results: results });
@@ -118,18 +118,21 @@ function car_(j) {
   return { car: Math.round(res.routes[0].legs[0].duration.value / 60) };
 }
 
-// ---- 施設の最寄りの駅・バス停・電停の下書き。job = {address, arrive} ----
-// 施設の住所から歩いて一番近い公共交通（駅・バス停・電停）を返す（先生が直す前提の下書き）
-// 候補＝OpenStreetMap の半径1.5km以内の駅・バス停・電停（近い順）＋Google の経路で施設のそばで乗り降りする所。徒歩の時間で一番短い所を選ぶ
-const NEAR_R = 1500;     // 探す半径（m）
-const NEAR_TRY = 5;      // 徒歩の時間を測る候補の数
-const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];   // よく502になるので1回は同じ所へ
-
-function station_(j) {
+// ---- 施設の住所→緯度経度。job = {address} ----
+function geo_(j) {
   const g = Maps.newGeocoder().setLanguage('ja').setRegion('jp').geocode(place_(j.address));
   if (!g.results || !g.results.length) return { err: '住所が地図で見つからない' };
-  const here = g.results[0].geometry.location;   // {lat, lng}
-  const cands = nearStops_(here).slice(0, NEAR_TRY);
+  return g.results[0].geometry.location;   // {lat, lng}
+}
+
+// ---- 施設の最寄りの駅・バス停・電停の下書き。job = {address, arrive, here?, cands?} ----
+// 施設の住所から歩いて一番近い公共交通（駅・バス停・電停）を返す（先生が直す前提の下書き）
+// 候補＝画面が OpenStreetMap から拾った近くの停留所（cands・無くてもよい）＋Google の経路で施設のそばで乗り降りする所。徒歩の時間で一番短い所を選ぶ
+// OpenStreetMap（Overpass）は返事が来ないことがある＝GAS からは呼ばない（待つと6分を超えて固まる・2026-10-21）
+function station_(j) {
+  const here = j.here || geo_(j);
+  if (here.err) return here;
+  const cands = (j.cands || []).slice(0, 4);
   routeStops_(j).forEach(c => { if (!cands.some(x => x.name === c.name)) cands.push(c); });
   if (!cands.length) return { err: '近くに駅・バス停が見つからない' };
   let best = null;
@@ -144,45 +147,11 @@ function station_(j) {
   return best || { err: '徒歩の経路が出ない' };
 }
 
-// OpenStreetMap から近くの駅・バス停・電停（直線距離の近い順・同じ名前は近い方だけ）
-function nearStops_(p) {
-  const q = '[out:json][timeout:20];(' +
-    'nwr(around:' + NEAR_R + ',' + p.lat + ',' + p.lng + ')[railway~"^(station|halt|tram_stop)$"];' +
-    'nwr(around:' + NEAR_R + ',' + p.lat + ',' + p.lng + ')[highway=bus_stop];' +
-    'nwr(around:' + NEAR_R + ',' + p.lat + ',' + p.lng + ')[public_transport=platform][bus=yes];' +
-    ');out center tags;';
-  let data = null;
-  for (let k = 0; k < OVERPASS.length && !data; k++) {
-    try {
-      const r = UrlFetchApp.fetch(OVERPASS[k], { method: 'post', payload: { data: q }, muteHttpExceptions: true });
-      if (r.getResponseCode() === 200) data = JSON.parse(r.getContentText());
-    } catch (_) {}
-  }
-  if (!data || !data.elements) return [];
-  const byName = {};
-  data.elements.forEach(e => {
-    const t = e.tags || {}, name = t['name:ja'] || t.name;
-    const lat = e.lat != null ? e.lat : (e.center || {}).lat, lng = e.lon != null ? e.lon : (e.center || {}).lon;
-    if (!name || lat == null) return;
-    const kind = t.railway === 'tram_stop' || t.tram === 'yes' ? '路面電車'
-      : (t.railway === 'station' || t.railway === 'halt') ? (t.station === 'subway' || t.subway === 'yes' ? '地下鉄' : '電車') : 'バス';
-    const d = meters_(p.lat, p.lng, lat, lng);
-    const key = kind + '|' + name;
-    if (!byName[key] || d < byName[key].d) byName[key] = { name: name, kind: kind, lat: lat, lng: lng, d: d };
-  });
-  return Object.keys(byName).map(k => byName[k]).sort((a, b) => a.d - b.d);
-}
-
-function meters_(a1, o1, a2, o2) {
-  const r = Math.PI / 180, x = (o2 - o1) * r * Math.cos((a1 + a2) / 2 * r), y = (a2 - a1) * r;
-  return Math.sqrt(x * x + y * y) * 6371000;
-}
-
-// Google の経路で施設のそばの停留所＝OpenStreetMap に載っていない停留所の保険（岡山の港の方などはバス停が空白）
-// 施設→岡山駅・施設→倉敷駅で最初に乗る所、岡山駅→施設で最後に降りる所
+// Google の経路で施設のそばの停留所（Google は出発・到着の近くの停留所を選ぶ＝向きを変えて何本か聞く）
+// 施設→岡山駅・倉敷駅・東岡山駅で最初に乗る所、岡山駅→施設で最後に降りる所
 function routeStops_(j) {
   const out = [];
-  [['施設', '岡山駅'], ['施設', '倉敷駅'], ['岡山駅', '施設']].forEach(pair => {
+  [['施設', '岡山駅'], ['施設', '倉敷駅'], ['施設', '東岡山駅'], ['岡山駅', '施設']].forEach(pair => {
     try {
       const fromFac = pair[0] === '施設';
       const res = Maps.newDirectionFinder()
