@@ -106,6 +106,10 @@ dialog .grid > .hint:empty { display: none; }
 dialog .grid .row { flex-wrap: nowrap; }
 dialog .grid .row input[type=text] { flex: 1; width: auto; min-width: 0; }
 dialog .grid input[type=number] { width: 80px; }
+dialog .grid > label { font-size: 13px; }
+dialog .grid input[type=text], dialog .grid input[type=number], dialog .grid select { height: 34px; box-sizing: border-box; }
+dialog .grid select { width: 110px; }
+dialog .grid > input[type=text] { width: 100%; }
 dialog .foot { display: flex; gap: 8px; margin-top: 16px; }
 .dt td:first-child { color: var(--sub); width: 130px; }
 
