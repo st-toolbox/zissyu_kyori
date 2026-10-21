@@ -1,6 +1,36 @@
 {
   "rules": {
-    ".read": "auth != null && (auth.token.email.matches(/.*@asahi\\.ac\\.jp/) || auth.token.email.matches(/.*@oky\\.asahi\\.ac\\.jp/))",
-    ".write": "auth != null && (auth.token.email.matches(/.*@asahi\\.ac\\.jp/) || auth.token.email.matches(/.*@oky\\.asahi\\.ac\\.jp/))"
+    ".read": false,
+    ".write": false,
+    "teachers": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      "$uid": {
+        ".write": "(auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()) || (auth != null && auth.token.email_verified == true && $uid == auth.uid && !data.exists() && root.child('invites').child(auth.token.email.toLowerCase().replace('.', ',')).exists())",
+        ".validate": "!newData.exists() || newData.hasChildren(['email'])"
+      }
+    },
+    "invites": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      "$key": {
+        ".read": "auth != null && auth.token.email_verified == true && $key == auth.token.email.toLowerCase().replace('.', ',')"
+      }
+    },
+    "settings": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()"
+    },
+    "facilities": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()"
+    },
+    "routes": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()"
+    },
+    "years": {
+      ".read": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()",
+      ".write": "auth != null && auth.token.email_verified == true && root.child('teachers').child(auth.uid).exists()"
+    }
   }
 }

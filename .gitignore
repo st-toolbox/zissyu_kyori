@@ -1,0 +1,8 @@
+*.csv
+*.xlsx
+*.xls
+*.pdf
+data/
+.env*
+*.json
+!database.rules.json
