@@ -675,7 +675,7 @@ async function runCalc(scope, mode, label) {
       stage = `施設の駅から歩く時間：${S.facilities[part[0]].name}${part.length > 1 ? ' ほか' + (part.length - 1) + '件' : ''}`; show();
       const res = await gas('walk', part.map(fid => ({ station: S.facilities[fid].station, loc: S.facilities[fid].stopLoc || null, address: S.facilities[fid].address })));
       const up = {};
-      part.forEach((fid, k) => { const r = res[k] || {}; if (r.walk != null) { up[`facilities/${fid}/walk`] = r.walk; up[`facilities/${fid}/bike`] = r.bike; Object.assign(S.facilities[fid], { walk: r.walk, bike: r.bike }); } });
+      part.forEach((fid, k) => { const r = res[k] || {}; if (r.walk != null) { up[`facilities/${fid}/walk`] = r.walk; up[`facilities/${fid}/bike`] = r.bike; up[`facilities/${fid}/walkPoly`] = r.poly || null; Object.assign(S.facilities[fid], { walk: r.walk, bike: r.bike, walkPoly: r.poly || null }); } });
       await db.ref().update(up); step(part.length);
     }
     // ② 駅→駅（徒歩が出て着きたい時刻が決まったので、ここで出し直す）
@@ -779,6 +779,7 @@ function openScope(scope, what) {
   if (scope.sid && scope.fid) {
     const ev = evalPair(scope.sid, scope.fid);
     info += '<br>' + ev.opts.map(o => `${esc(o.k)}：${o.total}分`).concat(ev.errs.map(esc)).join('<br>');
+    if (ev.opts.length) info += '<br><button type="button" class="small" id="scope-detail">経路を地図で見る</button>';
   }
   $('scope-info').innerHTML = info;
   const one = !!scope.sid && !scope.fid;
@@ -793,6 +794,7 @@ function openScope(scope, what) {
   };
   d.showModal();
   if (one) $('scope-addr').focus();
+  const sd = $('scope-detail'); if (sd) sd.onclick = () => { d.close(''); openDetail(scope.sid, scope.fid); };
 }
 async function gas(action, jobs) {
   if (!S.settings.gasUrl) throw new Error('設定で経路計算（GAS）の URL を入れる');
@@ -1015,10 +1017,45 @@ function openDetail(sid, fid) {
           ${o.r.fromAddr ? `<div class="hint" style="margin:0">Maps が読んだ駅：${esc(o.r.fromAddr)} → ${esc(o.r.toAddr)}</div>` : ''}</td></tr>
         <tr><td>③ 施設の駅から</td><td>${esc(stName(f.station))}${f.stopKind && f.stopKind !== '電車' ? '（' + esc(f.stopKind) + '）' : '駅'}から ${esc(f.access || '徒歩')} ${o.l3}分</td></tr></table>`;
     } else h += `<div class="hint">本人の住所から車（住所は保存していない）</div>`;
+    if (o.k !== '車') h += `<div class="rmap" data-i="${ev.opts.indexOf(o)}"></div>`;
     h += `</div>`;
   }
   if (ev.prop != null) h += `<p class="prop" style="color:var(--ok)">駅に自転車を置けば 約${ev.prop}分（③を自転車${f.bike}分にした目安）</p>`;
   $('detail-body').innerHTML = h; $('dlg-detail').showModal();
+  document.querySelectorAll('#detail-body .rmap').forEach(el => drawRoute(el, ev.opts[+el.dataset.i], f));
+}
+// Google の折れ線（encoded polyline）を緯度経度の並びに戻す
+function unpoly(str) {
+  const pts = []; let i = 0, lat = 0, lng = 0;
+  while (i < str.length) {
+    for (const k of [0, 1]) {
+      let b, sh = 0, r = 0;
+      do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      const d = r & 1 ? ~(r >> 1) : r >> 1;
+      if (k) lng += d; else lat += d;
+    }
+    pts.push([lat / 1e5, lng / 1e5]);
+  }
+  return pts;
+}
+// 大まかな経路を地図に描く：電車・バスは色の実線、歩きは点線。乗る所・降りる所に名前（家から乗る所までの線は持っていない）
+function drawRoute(el, o, f) {
+  const segs = o.k === '住所から' ? (o.d.poly || []) : (o.r.poly || []).concat(o.r.poly && f.walkPoly && (f.access || '徒歩') === '徒歩' ? [{ m: 'W', p: f.walkPoly }] : []);
+  if (!segs.length || !window.L) { el.outerHTML = `<div class="hint" style="margin:6px 0 0">${window.L ? '地図の線が無い（地図の機能より前に計算した）。3. 計算の表でこのマスを押して「上書き」でやり直すと出る。' : '地図を読み込めなかった（ネットにつながっているか）。'}</div>`; return; }
+  const map = L.map(el, { scrollWheelZoom: false });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+  const all = [], dot = { radius: 5, color: '#1d2422', fillColor: '#fff', fillOpacity: 1, weight: 2 };
+  segs.forEach(sg => {
+    const pts = sg.p ? unpoly(sg.p) : []; if (!pts.length) return; all.push(...pts);
+    if (sg.m === 'T') {
+      L.polyline(pts, { color: sg.c || '#1F4D45', weight: 5, opacity: .85 }).addTo(map).bindTooltip(sg.t || '');
+      L.circleMarker(pts[0], dot).addTo(map).bindTooltip(`${sg.a}（${sg.t}に乗る）`);
+      L.circleMarker(pts[pts.length - 1], dot).addTo(map).bindTooltip(`${sg.b}（降りる）`);
+    } else L.polyline(pts, { color: '#5d6b67', weight: 3, dashArray: '4 6' }).addTo(map);
+  });
+  if (!all.length) return;
+  L.circleMarker(all[all.length - 1], { radius: 7, color: '#b3261e', fillColor: '#b3261e', fillOpacity: 1 }).addTo(map).bindTooltip(f.name, { permanent: true, direction: 'top' });
+  setTimeout(() => { map.invalidateSize(); map.fitBounds(all, { padding: [24, 24] }); }, 60);
 }
 $('detail-close').onclick = () => $('dlg-detail').close();
 

@@ -108,6 +108,8 @@ dialog .grid input[type=text], dialog .grid input[type=number], dialog .grid sel
 dialog .grid select { width: 110px; }
 dialog .grid > input[type=text] { width: 100%; }
 dialog .foot { display: flex; gap: 8px; margin-top: 16px; }
+.rmap { height: 280px; margin-top: 8px; border: 1px solid var(--line); }
+@media print { .rmap { display: none; } }
 .dt td:first-child { color: var(--sub); width: 130px; }
 
 #busy { position: fixed; inset: 0; background: rgba(255,255,255,.6); display: none; align-items: center; justify-content: center; z-index: 50; font-weight: 500; }

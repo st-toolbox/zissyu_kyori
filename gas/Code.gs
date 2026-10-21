@@ -67,6 +67,21 @@ function weekday_(hhmm) {
 }
 
 // ---- 学生の駅（バス停・電停は緯度経度）→施設の最寄り。job = {from, fromLoc?, to, toLoc?, arrive:'08:10'} ----
+// 地図に描く線（Google の折れ線そのまま・区間ごと）。dropHead＝最初に乗るまでの歩きを捨てる（家の場所を残さない）
+function segs_(steps, dropHead) {
+  const out = []; let seen = false;
+  steps.forEach(st => {
+    const T = st.travel_mode === 'TRANSIT';
+    if (T) seen = true;
+    if (dropHead && !seen) return;
+    const td = st.transit_details || {}, ln = td.line || {};
+    out.push({ m: T ? 'T' : 'W', t: T ? (ln.short_name || ln.name || '') : '', c: T ? (ln.color || '') : '',
+      a: T && td.departure_stop ? td.departure_stop.name : '', b: T && td.arrival_stop ? td.arrival_stop.name : '',
+      p: st.polyline ? st.polyline.points : '' });
+  });
+  return out;
+}
+
 function transit_(j) {
   const from = station_name_(j.from), to = station_name_(j.to);
   if (from === to && !j.fromLoc && !j.toLoc) return { ride: 0, transfers: 0, shinkansen: false, lines: '同じ駅', dep: '', arr: '' };
@@ -94,7 +109,7 @@ function transit_(j) {
     ride: Math.round(leg.duration.value / 60),   // 出発駅を出てから着く駅まで（乗換の待ちを含む）
     transfers: transits - 1, shinkansen: shin, lines: lines.join(' / '),
     dep: leg.departure_time ? leg.departure_time.text : '', arr: leg.arrival_time ? leg.arrival_time.text : '',
-    fromAddr: leg.start_address, toAddr: leg.end_address, extraWalk: firstWalk
+    fromAddr: leg.start_address, toAddr: leg.end_address, extraWalk: firstWalk, poly: segs_(leg.steps, false)
   };
 }
 
@@ -106,7 +121,7 @@ function walk_(j) {
   if (!res.routes || !res.routes.length) return { err: '徒歩の経路なし' };
   const leg = res.routes[0].legs[0];
   const m = leg.distance.value;
-  return { walk: Math.round(leg.duration.value / 60), meters: m, bike: Math.max(1, Math.ceil(m / 250)) };  // 自転車は時速15kmの目安
+  return { walk: Math.round(leg.duration.value / 60), meters: m, bike: Math.max(1, Math.ceil(m / 250)), poly: res.routes[0].overview_polyline.points };  // 自転車は時速15kmの目安
 }
 
 // ---- 車（住所はこの呼び出しの中だけ・保存しない）。job = {from, to, arrive} ----
@@ -150,7 +165,8 @@ function door_(j) {
   return {
     min: Math.round(leg.duration.value / 60),   // 家を出てから施設に着くまで（乗換の待ちを含む）
     transfers: Math.max(0, transits - 1), shinkansen: shin, lines: lines.join(' / '), walk1: walk1, walk2: transits ? walk2 : 0,
-    dep: leg.departure_time ? leg.departure_time.text : '', arr: leg.arrival_time ? leg.arrival_time.text : ''
+    dep: leg.departure_time ? leg.departure_time.text : '', arr: leg.arrival_time ? leg.arrival_time.text : '',
+    poly: segs_(leg.steps, true)   // 家から最初に乗る所までの歩きは捨てる
   };
 }
 
