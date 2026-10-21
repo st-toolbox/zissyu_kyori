@@ -74,8 +74,9 @@
         <div class="bar"><div id="calc-bar"></div></div>
         <div id="calc-msg" class="hint"></div>
       </div>
-      <h2>車で直接通う学生</h2>
-      <p class="hint">確認票で「車で実習先まで直接通える」にした学生だけ。住所はここに入れて計算するだけで<b>保存しない</b>（画面を離れると消える）。保存するのは施設ごとの分数だけ。車通勤可の施設だけ計算する。</p>
+      <h2>住所から計算（最終）</h2>
+      <p class="hint">家の住所→施設の住所を、始業−ゆとりに着く電車・バスで Google Maps に聞く。出た学生は、ふだんの駅の見積もりの代わりにこの分数で割り振る。住所はここに入れて計算するだけで<b>保存しない</b>（画面を離れると消える）。保存するのは施設ごとの分数と乗る路線だけ。「車で直接」の学生は、同じ住所で車通勤可の施設の車の時間も出す。</p>
+      <div class="row" style="margin-bottom:8px"><button id="addr-paste">住所をまとめて貼り付け</button></div>
       <div class="box" id="car-box"></div>
     </section>
 
@@ -172,11 +173,13 @@
     <label>学年</label><input type="text" name="grade">
     <label>この年度の実習</label><div class="row"><label class="ck"><input type="checkbox" name="t評価"> 評価</label><label class="ck"><input type="checkbox" name="t総合"> 総合</label><label class="ck"><input type="checkbox" name="t見学"> 見学</label></div>
     <label>小児希望</label><label class="ck"><input type="checkbox" name="ped"> 小児を希望</label>
-    <label>ふだん使う駅</label><input type="text" name="st">
+    <label>ふだん使う駅・バス停</label><div class="row"><input type="text" name="st"><select name="stKind"><option>電車</option><option>バス</option><option>路面電車</option></select></div>
+    <div class="hint" id="stu-st-where" style="margin:0"></div>
     <label>駅までの手段・分数</label><div class="row"><select name="mode"><option>徒歩</option><option>自転車</option><option>車</option><option>送迎</option><option>バス</option></select><input type="number" name="min"> 分</div>
     <label>車で直接</label><label class="ck"><input type="checkbox" name="carDirect"> 車で実習先まで直接通える</label>
     <label>実家からの実習</label><select name="jkOk"><option value="">不可</option><option value="1">可</option></select>
-    <label>実家の駅</label><input type="text" name="jkSt">
+    <label>実家の駅・バス停</label><div class="row"><input type="text" name="jkSt"><select name="jkKind"><option>電車</option><option>バス</option><option>路面電車</option></select></div>
+    <div class="hint" id="stu-jk-where" style="margin:0"></div>
     <label>実家から駅まで</label><div class="row"><select name="jkMode"><option>徒歩</option><option>自転車</option><option>車</option><option>送迎</option><option>バス</option></select><input type="number" name="jkMin"> 分</div>
     <label>確認票の回収日</label><input type="text" name="slip" placeholder="例：2026-11-05">
     <label>過去の実習先（手で足す分）</label><input type="text" name="past" placeholder="施設名を「、」で区切る。前の年度の配置は自動で拾う">
@@ -202,6 +205,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-<script src="app.js?v=20261021f"></script>
+<script src="app.js?v=20261021g"></script>
 </body>
 </html>

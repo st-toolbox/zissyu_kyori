@@ -14,7 +14,7 @@ function doPost(e) {
   try { req = JSON.parse(e.postData.contents); } catch (_) { return out_({ status: 'ERROR', message: '形が違う' }); }
   if (!verifyTeacher_(req.idToken)) return out_({ status: 'ERROR', code: 'AUTH', message: '先生として確認できない（ログインし直す）' });
   const jobs = (req.jobs || []).slice(0, MAX_JOBS);
-  const fn = { transit: transit_, walk: walk_, car: car_, station: station_, geo: geo_ }[req.action];
+  const fn = { transit: transit_, walk: walk_, car: car_, station: station_, geo: geo_, door: door_ }[req.action];
   if (!fn) return out_({ status: 'ERROR', message: '知らない操作' });
   const results = jobs.map(j => { try { return fn(j); } catch (err) { return { err: String(err.message || err).slice(0, 100) }; } });
   return out_({ status: 'OK', results: results });
@@ -66,12 +66,12 @@ function weekday_(hhmm) {
   return d;
 }
 
-// ---- 駅→施設の最寄り（電車・バス・路面電車）。job = {from, to, toLoc?, arrive:'08:10'} ----
+// ---- 学生の駅（バス停・電停は緯度経度）→施設の最寄り。job = {from, fromLoc?, to, toLoc?, arrive:'08:10'} ----
 function transit_(j) {
   const from = station_name_(j.from), to = station_name_(j.to);
-  if (from === to) return { ride: 0, transfers: 0, shinkansen: false, lines: '同じ駅', dep: '', arr: '' };
+  if (from === to && !j.fromLoc && !j.toLoc) return { ride: 0, transfers: 0, shinkansen: false, lines: '同じ駅', dep: '', arr: '' };
   const res = Maps.newDirectionFinder()
-    .setOrigin(place_(from)).setDestination(stop_(j.to, j.toLoc))
+    .setOrigin(stop_(j.from, j.fromLoc)).setDestination(stop_(j.to, j.toLoc))
     .setMode(Maps.DirectionFinder.Mode.TRANSIT)
     .setArrive(weekday_(j.arrive)).setLanguage('ja').getDirections();
   if (!res.routes || !res.routes.length) return { err: '経路なし' };
@@ -118,11 +118,40 @@ function car_(j) {
   return { car: Math.round(res.routes[0].legs[0].duration.value / 60) };
 }
 
-// ---- 施設の住所→緯度経度。job = {address} ----
+// ---- 住所・停留所の名前→緯度経度。job = {address} ----
 function geo_(j) {
   const g = Maps.newGeocoder().setLanguage('ja').setRegion('jp').geocode(place_(j.address));
   if (!g.results || !g.results.length) return { err: '住所が地図で見つからない' };
-  return g.results[0].geometry.location;   // {lat, lng}
+  const r = g.results[0];
+  return { lat: r.geometry.location.lat, lng: r.geometry.location.lng, addr: String(r.formatted_address || '').replace(/^日本、\s*/, '') };
+}
+
+// ---- 家の住所→施設の住所（電車・バス・歩き）。job = {from, to, arrive}。住所は返さない・残さない ----
+function door_(j) {
+  const res = Maps.newDirectionFinder()
+    .setOrigin(place_(j.from)).setDestination(place_(j.to))
+    .setMode(Maps.DirectionFinder.Mode.TRANSIT)
+    .setArrive(weekday_(j.arrive)).setLanguage('ja').getDirections();
+  if (!res.routes || !res.routes.length) return { err: '経路なし' };
+  const leg = res.routes[0].legs[0];
+  let transits = 0, shin = false, walk1 = 0, walk2 = 0;
+  const lines = [];
+  leg.steps.forEach(st => {
+    if (st.travel_mode === 'TRANSIT') {
+      transits++; walk2 = 0;
+      const td = st.transit_details, ln = td.line || {}, nm = ln.short_name || ln.name || '';
+      if ((ln.vehicle && ln.vehicle.type === 'HIGH_SPEED_TRAIN') || /新幹線/.test(nm)) shin = true;
+      lines.push(nm + '（' + td.departure_stop.name + '→' + td.arrival_stop.name + '）');
+    } else if (st.travel_mode === 'WALKING') {
+      const m = Math.round(st.duration.value / 60);
+      if (!transits) walk1 += m; else walk2 += m;
+    }
+  });
+  return {
+    min: Math.round(leg.duration.value / 60),   // 家を出てから施設に着くまで（乗換の待ちを含む）
+    transfers: Math.max(0, transits - 1), shinkansen: shin, lines: lines.join(' / '), walk1: walk1, walk2: transits ? walk2 : 0,
+    dep: leg.departure_time ? leg.departure_time.text : '', arr: leg.arrival_time ? leg.arrival_time.text : ''
+  };
 }
 
 // ---- 施設の最寄りの駅・バス停・電停の下書き。job = {address, arrive, here?, cands?} ----
