@@ -129,7 +129,8 @@ function station_(j) {
   for (let i = 0; i < steps.length; i++) {
     const st = steps[i];
     if (st.travel_mode === 'WALKING') { walk += Math.round(st.duration.value / 60); continue; }
-    const v = (st.transit_details.line.vehicle || {}).type || '';
+    if (!st.transit_details) continue;
+    const v = ((st.transit_details.line || {}).vehicle || {}).type || '';
     if (/BUS/.test(v)) { busBefore = true; continue; }
     return { station: st.transit_details.departure_stop.name.replace(/駅$/, ''), walk: busBefore ? null : walk, busBefore: busBefore };
   }
