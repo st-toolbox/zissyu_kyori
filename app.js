@@ -580,6 +580,55 @@ $('stu-tpl').onclick = () => {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = '学生_貼り付け見本.csv'; a.click();
 };
 
+// Google フォーム（gas/Form.gs で作る）の回答の表を見出しごと貼る。見出しで読む＝列の順は問わない
+// ⚠️ 見出しは Form.gs の質問の文そのもの。メールアドレスの列は読まない（残さない）
+const FORM_Q = { ts: 'タイムスタンプ', sid: '学籍番号', name: '名前', st: 'ふだん使う駅・バス停の名前', kind: 'その種類', mode: 'そこまでの手段',
+  min: '家を出てから乗るまでの分', car: '車で実習先まで直接通えますか', jkOk: '実家からの実習',
+  jkSt: '実家の最寄りの駅・バス停の名前', jkKind: '実家の駅の種類', jkMode: '実家から駅までの手段', jkMin: '実家を出てから乗るまでの分' };
+const formKind = v => /バス/.test(v) ? 'バス' : /路面|電停/.test(v) ? '路面電車' : '電車';
+$('stu-form').onclick = () => openPaste('フォームの回答を貼り付け', '回答の表（スプレッドシート）を見出しの行ごと全部選んでコピーして貼る。同じ学籍番号は新しい回答で上書き。実習の種別（評価・総合・見学）はそのまま残す。', async rows => {
+  const head = (rows[0] || []).map(c => c.trim()), col = {};
+  for (const [k, t] of Object.entries(FORM_Q)) col[k] = head.indexOf(t);
+  if (col.sid < 0 || col.st < 0) return alert('見出しの行が見つからない。1行目（タイムスタンプ・学籍番号…）からコピーして貼る');
+  const up = {}, seen = {}; let n = 0, skip = 0;
+  for (const r of rows.slice(1)) {
+    const g = k => col[k] < 0 || r[col[k]] === undefined ? '' : String(r[col[k]]).trim();
+    const id = fk(g('sid')); if (!id) { skip++; continue; }
+    const s = { ...(seen[id] || students()[id] || {}) };   // 同じ人が2回答えていたら後の行（新しい方）で上書き
+    if (g('name')) s.name = g('name');
+    const st = stClean(g('st'), formKind(g('kind'))), kind = formKind(g('kind'));
+    if (st !== stClean(s.st, s.stKind) || kind !== (s.stKind || '電車')) { s.stLoc = null; s.stAddr = null; }
+    s.st = st; s.stKind = kind;
+    s.mode = MODES.includes(g('mode')) ? g('mode') : '徒歩'; s.min = num(g('min'));
+    s.carDirect = g('car') === 'はい';
+    const jk = { ...(s.jk || {}) }; jk.ok = /^可/.test(g('jkOk'));
+    if (jk.ok) {
+      const js = stClean(g('jkSt'), formKind(g('jkKind'))), jkind = formKind(g('jkKind'));
+      if (js !== stClean(jk.st, jk.kind) || jkind !== (jk.kind || '電車')) { jk.loc = null; jk.addr = null; }
+      Object.assign(jk, { st: js, kind: jkind, mode: MODES.includes(g('jkMode')) ? g('jkMode') : '徒歩', min: num(g('jkMin')) });
+    }
+    s.jk = jk;
+    const m = g('ts').match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+    s.slip = m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}（フォーム）` : 'フォーム';
+    if (!students()[id] && !seen[id]) s.t = {};
+    seen[id] = s; up[ypath('students/' + id)] = s;
+  }
+  n = Object.keys(seen).length;
+  if (!n) return toast('取り込める回答がなかった');
+  const nNew = Object.values(seen).filter(s => !Object.values(s.t || {}).some(Boolean)).length;
+  await db.ref().update(up);
+  toast(`${n}人の回答を取り込んだ${skip ? `（学籍番号が空の${skip}行は飛ばした）` : ''}${nNew ? `。実習の種別が未設定の学生が${nNew}人＝学生の画面で付ける` : ''}`);
+  const k = await locateStops(Object.keys(seen));
+  if (k) toast(`${n}人を取り込んだ。バス停・電停 ${k}件の場所を地図で読んだ（学生の画面で確かめられる）`);
+});
+$('prt-form').onclick = async () => {
+  try {
+    const src = await (await fetch('gas/Form.gs', { cache: 'no-store' })).text();
+    await navigator.clipboard.writeText(src);
+    toast('フォームを作るスクリプトをコピーした。下の手順で貼って動かす');
+  } catch (e) { fail(e); }
+};
+
 // 貼り付けの共通
 function openPaste(title, hint, onOk) {
   $('paste-title').textContent = title; $('paste-hint').textContent = hint; $('paste-text').value = '';

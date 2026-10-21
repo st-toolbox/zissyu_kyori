@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
-<link rel="stylesheet" href="style.css?v=20261021n">
+<link rel="stylesheet" href="style.css?v=20261022a">
 </head>
 <body>
 
@@ -57,11 +57,12 @@
     <section id="v-stu">
       <div class="row"><h1>学生</h1><span class="spacer"></span>
         <button id="stu-add">学生を足す</button>
+        <button id="stu-form">フォームの回答を貼り付け</button>
         <button id="stu-paste">表から貼り付け</button>
         <button id="stu-tpl">貼り付け用の見本（CSV）</button>
       </div>
       <p class="hint">住所は入れない。持つのは「ふだん使う駅・駅までの手段と分数」と「実家からの実習 可/不可（可なら実家の駅）」だけ。<br>
-        中身は学生に「通学の確認票」（5. 印刷）で書いて確認してもらってから入れる。</p>
+        中身は学生に「通学の確認票」（5. 印刷）か Google フォームで答えてもらってから入れる。</p>
       <div class="tablewrap"><table id="stu-table"></table></div>
     </section>
 
@@ -107,6 +108,17 @@
         <p class="hint">計算の前に配って、本人に書いてもらい回収する。学籍番号と名前は刷り込む。住所は書かせない。</p>
         <div class="row"><button class="primary" id="prt-slip">この年度の学生全員分を印刷</button>
           <button id="prt-slip-blank">名前なしの白紙を1枚</button></div>
+      </div>
+      <div class="box">
+        <h2 style="margin-top:0">通学の確認フォーム（Google フォーム）</h2>
+        <p class="hint">紙の確認票と同じ中身。毎年1回作る（年度はスクリプトが付ける）。住所は聞かない。学生は学校のアカウントでログインして答える（1人1回・あとで直せる）。</p>
+        <div class="row"><button class="primary" id="prt-form">フォームを作るスクリプトをコピー</button></div>
+        <ol class="hint" style="margin:6px 0 0 1.2em;padding:0">
+          <li><b>学校のアカウント</b>で script.google.com を開く → 新しいプロジェクト → 中身を全部消して貼る</li>
+          <li>上の関数の欄で「makeForm」を選んで ▶実行 → 許可する（初回だけ）</li>
+          <li>下の実行ログに出る「学生に配る URL」を学生に送る（「回答の表」は先生が見る）</li>
+          <li>回答が集まったら、回答の表を見出しの行ごと全部コピー → 2. 学生 →「フォームの回答を貼り付け」</li>
+        </ol>
       </div>
       <div class="box">
         <h2 style="margin-top:0">配置の一覧（先生用）</h2>
@@ -215,6 +227,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
-<script src="app.js?v=20261021l"></script>
+<script src="app.js?v=20261022a"></script>
 </body>
 </html>
