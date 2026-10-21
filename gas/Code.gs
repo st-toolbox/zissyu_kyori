@@ -119,23 +119,84 @@ function car_(j) {
 }
 
 // ---- 施設の最寄りの駅・バス停・電停の下書き。job = {address, arrive} ----
-// 岡山駅から施設へ公共交通（電車・バス・路面電車）で行く経路をとり、最後に降りる所を返す（先生が直す前提の下書き）
+// 施設の住所から歩いて一番近い公共交通（駅・バス停・電停）を返す（先生が直す前提の下書き）
+// 候補＝OpenStreetMap の半径1.5km以内の駅・バス停・電停（近い順）＋Google の経路で施設のそばで乗り降りする所。徒歩の時間で一番短い所を選ぶ
+const NEAR_R = 1500;     // 探す半径（m）
+const NEAR_TRY = 5;      // 徒歩の時間を測る候補の数
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];   // よく502になるので1回は同じ所へ
+
 function station_(j) {
-  const res = Maps.newDirectionFinder()
-    .setOrigin(place_('岡山駅')).setDestination(place_(j.address))
-    .setMode(Maps.DirectionFinder.Mode.TRANSIT)
-    .setArrive(weekday_(j.arrive || '08:10')).setLanguage('ja').getDirections();
-  if (!res.routes || !res.routes.length) return { err: '岡山駅からの経路が見つからない' };
-  const steps = res.routes[0].legs[0].steps;
-  let last = -1;
-  steps.forEach((st, i) => { if (st.travel_mode === 'TRANSIT' && st.transit_details) last = i; });
-  if (last < 0) {   // 乗り物を使わない経路しか出ない＝岡山駅から歩く
-    return { station: '岡山', kind: '電車', walk: Math.round(res.routes[0].legs[0].duration.value / 60), walkOnly: true };
+  const g = Maps.newGeocoder().setLanguage('ja').setRegion('jp').geocode(place_(j.address));
+  if (!g.results || !g.results.length) return { err: '住所が地図で見つからない' };
+  const here = g.results[0].geometry.location;   // {lat, lng}
+  const cands = nearStops_(here).slice(0, NEAR_TRY);
+  routeStops_(j).forEach(c => { if (!cands.some(x => x.name === c.name)) cands.push(c); });
+  if (!cands.length) return { err: '近くに駅・バス停が見つからない' };
+  let best = null;
+  cands.forEach(c => {
+    const res = Maps.newDirectionFinder()
+      .setOrigin(here.lat + ',' + here.lng).setDestination(c.lat + ',' + c.lng)
+      .setMode(Maps.DirectionFinder.Mode.WALKING).setLanguage('ja').getDirections();
+    if (!res.routes || !res.routes.length) return;
+    const walk = Math.round(res.routes[0].legs[0].duration.value / 60);
+    if (!best || walk < best.walk) best = { station: c.name.replace(/駅$/, ''), kind: c.kind, loc: c.lat + ',' + c.lng, walk: walk };
+  });
+  return best || { err: '徒歩の経路が出ない' };
+}
+
+// OpenStreetMap から近くの駅・バス停・電停（直線距離の近い順・同じ名前は近い方だけ）
+function nearStops_(p) {
+  const q = '[out:json][timeout:20];(' +
+    'nwr(around:' + NEAR_R + ',' + p.lat + ',' + p.lng + ')[railway~"^(station|halt|tram_stop)$"];' +
+    'nwr(around:' + NEAR_R + ',' + p.lat + ',' + p.lng + ')[highway=bus_stop];' +
+    'nwr(around:' + NEAR_R + ',' + p.lat + ',' + p.lng + ')[public_transport=platform][bus=yes];' +
+    ');out center tags;';
+  let data = null;
+  for (let k = 0; k < OVERPASS.length && !data; k++) {
+    try {
+      const r = UrlFetchApp.fetch(OVERPASS[k], { method: 'post', payload: { data: q }, muteHttpExceptions: true });
+      if (r.getResponseCode() === 200) data = JSON.parse(r.getContentText());
+    } catch (_) {}
   }
-  const td = steps[last].transit_details, stop = td.arrival_stop;
-  const v = ((td.line || {}).vehicle || {}).type || '';
-  const kind = /BUS/.test(v) ? 'バス' : /TRAM|LIGHT_RAIL/.test(v) ? '路面電車' : '電車';
-  let walk = 0;
-  for (let i = last + 1; i < steps.length; i++) walk += Math.round(steps[i].duration.value / 60);
-  return { station: stop.name.replace(/駅$/, ''), kind: kind, loc: stop.location.lat + ',' + stop.location.lng, walk: walk };
+  if (!data || !data.elements) return [];
+  const byName = {};
+  data.elements.forEach(e => {
+    const t = e.tags || {}, name = t['name:ja'] || t.name;
+    const lat = e.lat != null ? e.lat : (e.center || {}).lat, lng = e.lon != null ? e.lon : (e.center || {}).lon;
+    if (!name || lat == null) return;
+    const kind = t.railway === 'tram_stop' || t.tram === 'yes' ? '路面電車'
+      : (t.railway === 'station' || t.railway === 'halt') ? (t.station === 'subway' || t.subway === 'yes' ? '地下鉄' : '電車') : 'バス';
+    const d = meters_(p.lat, p.lng, lat, lng);
+    const key = kind + '|' + name;
+    if (!byName[key] || d < byName[key].d) byName[key] = { name: name, kind: kind, lat: lat, lng: lng, d: d };
+  });
+  return Object.keys(byName).map(k => byName[k]).sort((a, b) => a.d - b.d);
+}
+
+function meters_(a1, o1, a2, o2) {
+  const r = Math.PI / 180, x = (o2 - o1) * r * Math.cos((a1 + a2) / 2 * r), y = (a2 - a1) * r;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+// Google の経路で施設のそばの停留所＝OpenStreetMap に載っていない停留所の保険（岡山の港の方などはバス停が空白）
+// 施設→岡山駅・施設→倉敷駅で最初に乗る所、岡山駅→施設で最後に降りる所
+function routeStops_(j) {
+  const out = [];
+  [['施設', '岡山駅'], ['施設', '倉敷駅'], ['岡山駅', '施設']].forEach(pair => {
+    try {
+      const fromFac = pair[0] === '施設';
+      const res = Maps.newDirectionFinder()
+        .setOrigin(place_(fromFac ? j.address : pair[0])).setDestination(place_(fromFac ? pair[1] : j.address))
+        .setMode(Maps.DirectionFinder.Mode.TRANSIT)
+        .setArrive(weekday_(j.arrive || '08:10')).setLanguage('ja').getDirections();
+      if (!res.routes || !res.routes.length) return;
+      const tds = res.routes[0].legs[0].steps.filter(st => st.travel_mode === 'TRANSIT' && st.transit_details).map(st => st.transit_details);
+      if (!tds.length) return;
+      const td = fromFac ? tds[0] : tds[tds.length - 1], stop = fromFac ? td.departure_stop : td.arrival_stop;
+      const v = ((td.line || {}).vehicle || {}).type || '';
+      const kind = /BUS/.test(v) ? 'バス' : /TRAM|LIGHT_RAIL/.test(v) ? '路面電車' : /SUBWAY|METRO/.test(v) ? '地下鉄' : '電車';
+      out.push({ name: stop.name, kind: kind, lat: stop.location.lat, lng: stop.location.lng });
+    } catch (_) {}
+  });
+  return out;
 }

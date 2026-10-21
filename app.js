@@ -342,12 +342,12 @@ $('fac-draft').onclick = async () => {
   // 駅が空の施設と、まだ「駅は下書き」のままの施設（先生が直した駅は触らない）
   const todo = Object.keys(S.facilities).filter(fid => (!S.facilities[fid].station || S.facilities[fid].draft) && S.facilities[fid].address);
   if (!todo.length) return toast('駅が空・下書きのままの施設は無い');
-  if (!confirm(`${todo.length}施設の最寄り（駅・バス停・電停）を Maps で下書きする（駅が空の施設と「駅は下書き」のままの施設。先生が直した駅は触らない）`)) return;
+  if (!confirm(`${todo.length}施設の最寄り（施設から歩いて一番近い駅・バス停・電停）を下書きする（駅が空の施設と「駅は下書き」のままの施設。先生が直した駅は触らない）`)) return;
   busy(true, '駅を探している…');
   let ok = 0; const errs = {}; const okayama = [];
   try {
-    for (let i = 0; i < todo.length; i += 10) {
-      const part = todo.slice(i, i + 10);
+    for (let i = 0; i < todo.length; i += 5) {   // 1件で地図に10回あまり聞く＝GASの6分に収まるよう5件ずつ
+      const part = todo.slice(i, i + 5);
       const res = await gas('station', part.map(fid => ({ address: S.facilities[fid].address, arrive: startOf(fid) })));
       const up = {};
       part.forEach((fid, k) => {
@@ -358,7 +358,7 @@ $('fac-draft').onclick = async () => {
           [`facilities/${fid}/draft`]: true, [`facilities/${fid}/walk`]: null, [`facilities/${fid}/bike`]: null, [`facilities/${fid}/access`]: null });
       });
       await db.ref().update(up);
-      busy(true, `駅を探している… ${Math.min(i + 10, todo.length)}/${todo.length}`);
+      busy(true, `駅を探している… ${Math.min(i + 5, todo.length)}/${todo.length}`);
     }
     const ng = Object.keys(errs);
     const oka = okayama.length ? `\n\n岡山駅から歩きの経路しか出なかった ${okayama.length}件（駅は「岡山」で入れた・確かめる）：${okayama.join('、')}` : '';
