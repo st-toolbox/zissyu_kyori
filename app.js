@@ -342,14 +342,16 @@ $('fac-draft').onclick = async () => {
   if (!todo.length) return toast('駅が空の施設は無い');
   if (!confirm(`${todo.length}施設の最寄り駅を Maps で下書きする（あとで先生が直す前提）`)) return;
   busy(true, '駅を探している…');
-  let ok = 0; const errs = {};
+  let ok = 0; const errs = {}; const okayama = [];
   try {
     for (let i = 0; i < todo.length; i += 10) {
       const part = todo.slice(i, i + 10);
       const res = await gas('station', part.map(fid => ({ address: S.facilities[fid].address })));
       const up = {};
       part.forEach((fid, k) => {
-        const r = res[k] || {};
+        let r = res[k] || {};
+        // 岡山駅まで電車に乗らない施設（徒歩かバスだけ）＝岡山駅を下書きにする（バスかどうかは先生が確かめる）
+        if (!r.station && /^岡山駅まで/.test(r.err || '')) { r = { station: '岡山' }; okayama.push(S.facilities[fid].name || fid); }
         if (r.station) ok++; else { const m = r.err || '返事なし'; (errs[m] = errs[m] || []).push(S.facilities[fid].name || fid); }
         if (r.station) { up[`facilities/${fid}/station`] = r.station; up[`facilities/${fid}/draft`] = true; up[`facilities/${fid}/walk`] = null; }
         if (r.station && r.busBefore) { up[`facilities/${fid}/access`] = 'バス'; }
@@ -358,9 +360,10 @@ $('fac-draft').onclick = async () => {
       busy(true, `駅を探している… ${Math.min(i + 10, todo.length)}/${todo.length}`);
     }
     const ng = Object.keys(errs);
-    if (ng.length) {
+    const oka = okayama.length ? `\n\n岡山駅を入れた ${okayama.length}件（岡山駅まで電車に乗らない＝徒歩かバス。バスなら手段を直す）：${okayama.join('、')}` : '';
+    if (ng.length || oka) {
       busy(false);
-      alert(`下書きできた ${ok}件／できなかった ${todo.length - ok}件\n\n` + ng.map(m => `【${m}】${errs[m].length}件：${errs[m].slice(0, 5).join('、')}${errs[m].length > 5 ? ' ほか' : ''}`).join('\n'));
+      alert(`下書きできた ${ok}件／できなかった ${todo.length - ok}件` + oka + (ng.length ? '\n\n' : '') + ng.map(m => `【${m}】${errs[m].length}件：${errs[m].slice(0, 5).join('、')}${errs[m].length > 5 ? ' ほか' : ''}`).join('\n'));
     } else toast(`下書きした ${ok}件。「駅は下書き」の印の施設を確かめて直す`);
   } catch (e) { fail(e); }
   busy(false);
