@@ -252,13 +252,34 @@ function openFac(fid) {
 
 // 表から貼り付け（施設）
 const FAC_COLS = ['施設名', '住所', '駅', '駅から徒歩分', '駅から先の手段', 'バス送迎分', '小児', '車通勤可', '評価人数', '総合人数', '見学人数', '始業'];
-$('fac-paste').onclick = () => openPaste('施設を表から貼り付け', '列の順：' + FAC_COLS.join('・') + '。○/1/可 を「はい」と読む。同じ施設名はその行で上書き（空の欄は今の値のまま）。', async rows => {
+// 1行目が見出しなら名前で列を拾う（旧アプリの「種別・施設名・住所・小児・時間・受入人数」の形も読む）
+const FAC_ALIAS = [
+  [0, /^施設名?$/], [1, /^住所$/], [2, /^(最寄り?)?駅$/], [3, /徒歩/], [4, /手段/], [5, /(バス|送迎)/], [6, /小児/], [7, /車/],
+  [8, /^評価/], [9, /^総合/], [10, /^見学/], [11, /^(始業|時間|開始)/], ['type', /^種別$/], ['n', /^(受入)?人数$/],
+];
+function facRows(rows) {
+  const head = rows[0] || [];
+  if (!head.some(h => /^施設名?$/.test(String(h).trim()))) return rows;
+  const pos = {};
+  head.forEach((h, i) => { const a = FAC_ALIAS.find(([, re]) => re.test(String(h).trim())); if (a && !(a[0] in pos)) pos[a[0]] = i; });
+  return rows.slice(1).map(r => {
+    const o = new Array(12).fill('');
+    Object.entries(pos).forEach(([k, i]) => { if (!isNaN(k)) o[k] = (r[i] || '').trim(); });
+    const t = pos.type != null ? String(r[pos.type] || '').trim() : '';
+    if (pos.n != null && TYPES.includes(t)) o[8 + TYPES.indexOf(t)] = (r[pos.n] || '').trim();
+    if (o[11]) o[11] = normTime(o[11]);
+    return o;
+  });
+}
+$('fac-paste').onclick = () => openPaste('施設を表から貼り付け', '1行目に見出し（施設名・住所・小児・始業 など）があれば名前で読む。見出しが無ければ列の順：' + FAC_COLS.join('・') + '。「種別」と「受入人数」の列があれば、その種別の人数に入れる。○/1/可/TRUE を「はい」と読む。同じ施設名はその行で上書き（空の欄は今の値のまま）。', async rows => {
+  rows = facRows(rows);
   const byName = {}; Object.entries(S.facilities).forEach(([k, f]) => byName[f.name] = k);
   const up = {}; let n = 0;
   for (const r of rows) {
     if (!r[0] || r[0] === '施設名') continue;
     const id = byName[r[0]] || newId(); byName[r[0]] = id;
-    const f = { ...(S.facilities[id] || {}) }, yf = { ...yFac(id) }, cap = { ...(yf.cap || {}) };
+    // 同じ施設が種別ちがいで何行あっても足し合わせる（前の行で作った分を引き継ぐ）
+    const f = { ...(up['facilities/' + id] || S.facilities[id] || {}) }, yf = { ...(up[ypath('facilities/' + id)] || yFac(id)) }, cap = { ...(yf.cap || {}) };
     f.name = r[0];
     if (r[1]) f.address = r[1];
     if (r[2]) { f.station = stName(r[2]); f.draft = null; }
