@@ -160,6 +160,7 @@ const rKey = (a, b, arr) => fk(a) + '__' + fk(b) + '__' + arr.replace(':', '');
 // バス停・電停は同じ名前の駅と別の経路として持つ
 const bKey = b => isTrain(b.kind) ? b.st : b.st + '〔' + b.kind + '〕';
 const doorOf = (sid, fid) => (((Y().door || {})[sid]) || {})[fid];
+const doorJkOf = (sid, fid) => (((Y().doorJk || {})[sid]) || {})[fid];   // 実家の住所から
 // 住所から：施設に着きたい時刻＝始業−ゆとり
 function doorArrive(fid) {
   const [h, m] = startOf(fid).split(':').map(Number);
@@ -178,12 +179,15 @@ function bases(s) {
 function evalPair(sid, fid) {
   const s = students()[sid] || {}, f = S.facilities[fid] || {};
   const opts = []; let pending = false, errs = [];
-  const l3 = leg3(f), arr = arriveBy(fid), door = doorOf(sid, fid);
-  // 住所からの分があれば、ふだんの駅の見積もりの代わりにそれを使う（最終）
+  const l3 = leg3(f), arr = arriveBy(fid), door = doorOf(sid, fid), dj = s.jk && s.jk.ok ? doorJkOf(sid, fid) : null;
+  // 住所からの分があれば、その駅の見積もりの代わりにそれを使う（最終）。実家は「実家から可」の学生だけ
   if (door && door.min != null) opts.push({ k: '住所から', total: door.min, d: door });
   else if (door && door.err) errs.push('住所から：' + door.err);
+  if (dj && dj.min != null) opts.push({ k: '実家の住所から', total: dj.min, d: dj });
+  else if (dj && dj.err) errs.push('実家の住所から：' + dj.err);
   for (const b of bases(s)) {
     if (b.k === 'ふだん' && door && door.min != null) continue;
+    if (b.k === '実家' && dj && dj.min != null) continue;
     if (!f.station || l3 == null || !arr) { pending = true; continue; }
     const r = S.routes[rKey(bKey(b), f.station, arr)];
     if (!r) { pending = true; continue; }
@@ -195,7 +199,7 @@ function evalPair(sid, fid) {
   opts.sort((a, b) => a.total - b.total);
   const best = opts[0] || null;
   let prop = null;   // 駅に自転車を置けば
-  if (best && best.k !== '車' && best.k !== '住所から' && (f.access || '徒歩') === '徒歩' && num(f.bike) != null && num(f.bike) < num(f.walk) && best.total > num(S.settings.ok)) {
+  if (best && best.k !== '車' && !best.d && (f.access || '徒歩') === '徒歩' && num(f.bike) != null && num(f.bike) < num(f.walk) && best.total > num(S.settings.ok)) {
     prop = best.total - num(f.walk) + num(f.bike);
     if (prop > num(S.settings.warn)) prop = null;  // 自転車にしても△に収まらないなら出さない
   }
@@ -490,7 +494,7 @@ function openStu(sid) {
   $('stu-del').style.display = sid ? '' : 'none';
   $('stu-del').onclick = async () => {
     if (!confirm(`${s.name}を${S.year}年度から消す？（この年度の配置と車の分数も消える）`)) return;
-    const up = { [ypath('students/' + sid)]: null, [ypath('car/' + sid)]: null, [ypath('door/' + sid)]: null };
+    const up = { [ypath('students/' + sid)]: null, [ypath('car/' + sid)]: null, [ypath('door/' + sid)]: null, [ypath('doorJk/' + sid)]: null };
     TYPES.forEach(t => up[ypath(`assignments/${t}/${sid}`)] = null);
     await db.ref().update(up).catch(fail); $('dlg-stu').close();
   };
@@ -692,6 +696,8 @@ function openPaste(title, hint, onOk) {
 const doorFacs = sid => Object.keys(S.facilities).filter(fid => S.facilities[fid].address && TYPES.some(t => ((students()[sid] || {}).t || {})[t] && num(((yFac(fid).cap) || {})[t]) > 0));
 const carFacs = sid => doorFacs(sid).filter(fid => S.facilities[fid].carOk);
 const addrOf = sid => (S.addr || {})[sid] || '';
+const addrJkOf = sid => (S.addrJk || {})[sid] || '';   // 実家の住所（これも保存しない）
+const jkOk = sid => !!(((students()[sid] || {}).jk || {}).ok);
 // 学生×施設の組（その学生の実習の種別で動いている施設）。scope で絞る
 function pairsOf(scope) {
   scope = scope || {}; const P = new Map();
@@ -707,9 +713,11 @@ function pairsOf(scope) {
 }
 // 1件の状態：done（出た）／ng（経路なし）／todo（まだ）。住所を読み込んだ学生は住所からの分が出るまで todo
 function cellState(sid, fid) {
-  const D = doorOf(sid, fid), ev = evalPair(sid, fid);
-  if (D && D.min != null) return { st: 'done', ev, src: '住' };
-  if (addrOf(sid) && !(D && D.err)) return { st: 'todo', ev };
+  const D = doorOf(sid, fid), J = doorJkOf(sid, fid), ev = evalPair(sid, fid);
+  const waitJ = addrJkOf(sid) && jkOk(sid) && !(J && (J.min != null || J.err));   // 実家の住所を入れたのにまだ出ていない
+  if (D && D.min != null && !waitJ) return { st: 'done', ev, src: '住' };
+  if ((addrOf(sid) && !(D && (D.min != null || D.err))) || waitJ) return { st: 'todo', ev };
+  if (J && J.min != null && jkOk(sid)) return { st: 'done', ev, src: '住' };
   if (ev.best) return { st: 'done', ev, src: ev.best.k === '車' ? '車' : '' };
   if (ev.errs.length && !ev.pending) return { st: 'ng', ev };
   return { st: 'todo', ev };
@@ -725,6 +733,7 @@ function transitJobs(P, mode) {
       if (!f.station || !arr) continue;
       for (const b of bs) {
         if (b.k === 'ふだん' && ((doorOf(sid, fid) || {}).min != null || addrOf(sid))) continue;   // 住所から出す（出した）
+        if (b.k === '実家' && ((doorJkOf(sid, fid) || {}).min != null || addrJkOf(sid))) continue;
         const key = rKey(bKey(b), f.station, arr), r = S.routes[key];
         if (want(mode, !!r, r && r.err)) out[key] = { from: stName(b.st), fromLoc: isTrain(b.kind) ? null : (b.loc || null), fromKind: b.kind, to: stName(f.station), toLoc: f.stopLoc || null, arrive: arr };
       }
@@ -746,6 +755,12 @@ async function runCalc(scope, mode, label) {
   // 住所からと車（住所を読み込んだ学生だけ）
   const doorJ = [], carJ = []; let noAddr = 0;
   P.forEach((fids, sid) => {
+    // 実家の住所（実家から可の学生だけ）は ふだん と同じやり方で、door ではなく doorJk に入れる
+    const fj = jkOk(sid) ? addrJkOf(sid) : '', DJ = (Y().doorJk || {})[sid] || {};
+    if (fj) {
+      const fs = doorFacs(sid).filter(fid => fids.has(fid) && want(mode, DJ[fid] && (DJ[fid].min != null || DJ[fid].err), DJ[fid] && DJ[fid].err));
+      if (fs.length) doorJ.push({ sid, from: fj, fs, jk: true });
+    }
     const from = addrOf(sid), D = (Y().door || {})[sid] || {}, C = (Y().car || {})[sid] || {};
     if (!from) { if ([...fids].some(fid => D[fid] && (mode === 'all' || (mode === 'ng' && D[fid].err)))) noAddr++; return; }
     const fs = doorFacs(sid).filter(fid => fids.has(fid) && want(mode, D[fid] && (D[fid].min != null || D[fid].err), D[fid] && D[fid].err));
@@ -786,9 +801,9 @@ async function runCalc(scope, mode, label) {
       const nm = students()[j.sid].name;
       for (let i = 0; i < j.fs.length && !S.calcStop; i += 10) {
         const part = j.fs.slice(i, i + 10), up = {};
-        stage = `住所から：${nm}（施設 ${i + 1}〜${i + part.length} / ${j.fs.length}）`; show();
+        stage = `${j.jk ? '実家の' : ''}住所から：${nm}（施設 ${i + 1}〜${i + part.length} / ${j.fs.length}）`; show();
         const res = await gas('door', part.map(fid => ({ from: j.from, to: S.facilities[fid].address, arrive: doorArrive(fid) })));
-        part.forEach((fid, k) => { const r = res[k] || { err: '応答なし' }; up[ypath(`door/${j.sid}/${fid}`)] = { ...r, arrive: doorArrive(fid), at: now() }; });
+        part.forEach((fid, k) => { const r = res[k] || { err: '応答なし' }; up[ypath(`${j.jk ? 'doorJk' : 'door'}/${j.sid}/${fid}`)] = { ...r, arrive: doorArrive(fid), at: now() }; });
         await db.ref().update(up); step(part.length);
       }
     }
@@ -822,9 +837,9 @@ function renderCalc() {
   const P = pairsOf(), n = { done: 0, ng: 0, todo: 0, door: 0 };
   P.forEach((fs, sid) => fs.forEach(fid => { const c = cellState(sid, fid); n[c.st]++; if (c.src === '住') n.door++; }));
   const all = n.done + n.ng + n.todo, sids = [...P.keys()];
-  const nAddr = sids.filter(addrOf).length;
+  const nAddr = sids.filter(sid => addrOf(sid) || addrJkOf(sid)).length;
   const walkTodo = Object.keys(S.facilities).filter(fid => { const f = S.facilities[fid]; return f.station && f.address && (f.access || '徒歩') === '徒歩' && f.walk == null; }).length;
-  const noBase = sids.filter(sid => !bases(students()[sid]).length && !addrOf(sid) && !Object.keys(((Y().door || {})[sid]) || {}).length).length;
+  const noBase = sids.filter(sid => !bases(students()[sid]).length && !addrOf(sid) && !addrJkOf(sid) && !Object.keys(((Y().door || {})[sid]) || {}).length).length;
   const noSt = [...new Set([].concat(...[...P.values()].map(s => [...s])))].filter(fid => !S.facilities[fid].station || !arriveBy(fid)).length;
   $('calc-sum').innerHTML = `<div class="row" style="gap:6px"><b>出た ${n.done} / ${all}件</b>
     <span class="tag grn">出た ${n.done}（うち住所から ${n.door}）</span><span class="tag red">経路なし ${n.ng}</span><span class="tag">まだ ${n.todo}</span>
@@ -855,7 +870,7 @@ $('calc-tabs').onclick = e => { const b = e.target.closest('button[data-t]'); if
 $('calc-todo').onclick = () => askRun({}, 'todo', '全部');
 $('calc-ng').onclick = () => askRun({}, 'ng', '全部');
 $('calc-all').onclick = () => askRun({}, 'all', '全部');
-$('calc-sum').onclick = e => { if (e.target.id === 'addr-clear' && confirm('読み込んだ住所を消す？（出た分数は残る）')) { S.addr = {}; renderCalc(); } };
+$('calc-sum').onclick = e => { if (e.target.id === 'addr-clear' && confirm('読み込んだ住所（ふだん・実家）を消す？（出た分数は残る）')) { S.addr = {}; S.addrJk = {}; renderCalc(); } };
 // 表を押す：見出し＝施設、左＝学生、セル＝その1件
 $('calc-grid').onclick = e => {
   const c = e.target.closest('[data-sid],[data-fid]'); if (!c) return;
@@ -877,11 +892,16 @@ function openScope(scope, what) {
   const one = !!scope.sid && !scope.fid;
   $('scope-addr-row').style.display = scope.sid ? '' : 'none';
   $('scope-addr').value = scope.sid ? addrOf(scope.sid) : '';
+  $('scope-addr-jk').value = scope.sid ? addrJkOf(scope.sid) : '';
   d.returnValue = '';
   d.onclose = () => {
     const m = d.returnValue; if (!MODE_LABEL[m]) return;
-    if (scope.sid) { const a = $('scope-addr').value.trim(); S.addr = S.addr || {}; if (a) S.addr[scope.sid] = a; else delete S.addr[scope.sid]; }
-    $('scope-addr').value = '';
+    if (scope.sid) {
+      const a = $('scope-addr').value.trim(), b = $('scope-addr-jk').value.trim(); S.addr = S.addr || {}; S.addrJk = S.addrJk || {};
+      if (a) S.addr[scope.sid] = a; else delete S.addr[scope.sid];
+      if (b) S.addrJk[scope.sid] = b; else delete S.addrJk[scope.sid];
+    }
+    $('scope-addr').value = ''; $('scope-addr-jk').value = '';
     askRun(scope, m, what);
   };
   d.showModal();
@@ -913,60 +933,97 @@ function readSheet(raw) {
   return rows.map(r => r.map(x => x.replace(/\s+/g, ' ').trim())).filter(r => r.some(x => x));
 }
 const nz = s => String(s || '').normalize('NFKC').replace(/\s+/g, '');
-const ADDR_RE = /[都道府県市区町村郡]|丁目|番地|[0-9]+-[0-9]+/;
-// 1行＝1人。学籍番号か名前の列で学生を決め、住所の列（いくつに分かれていてもつなぐ）で計算する
-// 学籍番号も名前も無い（住所だけの列）なら、学生一覧の順（学籍番号順）に1行ずつ当てる＝先に確かめる
-function readAddrRows(raw) {
+// 住所の表：1行＝1人（学籍番号順）。ふだんの住所と実家の住所のセルに Excel から貼る
+// 貼ると選んだセルから右下へ広がる。貼った表に学籍番号か名前の列があれば、その行の学生に当てる（順番が違っても合う）
+const addrGridSids = () => Object.keys(students()).sort();
+const gridCell = (r, c) => $('addr-grid').querySelector(`input[data-r="${r}"][data-c="${c}"]`);
+function openAddrGrid() {
+  const sids = addrGridSids();
+  if (!sids.length) return toast('学生がまだいない（2. 学生）');
+  $('addr-grid').innerHTML = `<tr><th>学籍番号</th><th>名前</th><th>ふだんの住所</th><th>実家の住所</th></tr>` + sids.map((sid, r) => {
+    const s = students()[sid];
+    return `<tr data-sid="${esc(sid)}"><td>${esc(sid)}</td><td>${esc(s.name || '')}${jkOk(sid) ? '' : ' <span class="tag" title="実家の住所を入れると、使うときに「実家から可」にするか聞く">実家 未</span>'}</td>` +
+      `<td><input type="text" data-r="${r}" data-c="0" value="${esc(addrOf(sid))}" autocomplete="off"></td><td><input type="text" data-r="${r}" data-c="1" value="${esc(addrJkOf(sid))}" autocomplete="off"></td></tr>`;
+  }).join('');
+  addrGridCount();
+  const d = $('dlg-addr'); d.returnValue = '';
+  d.onclose = () => { if (d.returnValue === 'ok') saveAddrGrid().catch(fail); };
+  d.showModal();
+  const first = gridCell(0, 0); if (first) first.focus();
+}
+function addrGridCount() {
+  const ins = [...$('addr-grid').querySelectorAll('input')];
+  const n0 = ins.filter(i => i.dataset.c === '0' && i.value.trim()).length, n1 = ins.filter(i => i.dataset.c === '1' && i.value.trim()).length;
+  $('addr-grid-n').textContent = `ふだん ${n0}人・実家 ${n1}人`;
+}
+// 貼った表の1行から住所のセルだけ拾う（メール・郵便番号・電話は飛ばす）
+const addrCells = r => r.filter(c => c && !/@/.test(c) && !/^〒?\s*\d{3}-?\d{4}$/.test(c) && !/^[\d\-()（） ]{10,}$/.test(c));
+$('addr-grid').addEventListener('paste', e => {
+  const t = e.target; if (!t.matches || !t.matches('input[data-r]')) return;
+  const raw = (e.clipboardData || window.clipboardData).getData('text');
+  if (!/[\t\n]/.test(raw.replace(/\r?\n$/, ''))) return;   // 1セル分ならふつうに貼る
+  e.preventDefault();
+  let rows = readSheet(raw);
   const all = students(), sidOf = {}, byName = {};
-  Object.keys(all).forEach(sid => {
-    sidOf[nz(sid)] = sid;
-    const n = nz(all[sid].name); if (n) byName[n] = byName[n] === undefined ? sid : null;   // 同じ名前が2人なら名前では決めない
-  });
+  Object.keys(all).forEach(sid => { sidOf[nz(sid)] = sid; const n = nz(all[sid].name); if (n) byName[n] = byName[n] === undefined ? sid : null; });
   const who = c => sidOf[nz(c)] || sidOf[nz(fk(c))] || byName[nz(c)] || null;
-  let rows = readSheet(raw), cols = null;
-  // 見出し行があれば列を見出しで決める
-  const hi = rows.findIndex(r => r.some(c => /住所|所在地|都道府県|市区町村|番地/.test(c)) && !r.some(who) && !r.some(c => ADDR_RE.test(c) && /\d/.test(c)));
-  if (hi === 0) {
-    const h = rows[0];
-    cols = { id: h.findIndex(c => /学籍|番号|ID/i.test(c)), name: h.findIndex(c => /氏名|名前/.test(c) && !/ふりがな|フリガナ|カナ/.test(c)),
-      addr: h.map((c, k) => /住所|所在地|都道府県|市区町村|町名|番地|建物|方書/.test(c) && !/メール|mail/i.test(c) ? k : -1).filter(k => k >= 0) };
+  // 見出し行があれば、実家の列とふだんの住所の列（分かれていればつなぐ）を見出しで決める
+  let jkCol = -1, homeCols = null;
+  if (rows.length && !rows[0].some(who) && rows[0].some(c => /住所|実家|所在地/.test(c))) {
+    const h = rows[0]; jkCol = h.findIndex(c => /実家|帰省/.test(c));
+    homeCols = h.map((c, k) => k !== jkCol && /住所|所在地|都道府県|市区町村|町名|番地|建物|方書/.test(c) && !/メール|mail/i.test(c) ? k : -1).filter(k => k >= 0);
     rows = rows.slice(1);
   }
-  const out = [], miss = [];
-  for (const r of rows) {
-    let sid = null, addr = '';
-    if (cols) {
-      sid = (cols.id >= 0 && who(r[cols.id])) || (cols.name >= 0 && who(r[cols.name])) || r.map(who).find(x => x) || null;
-      addr = cols.addr.map(k => r[k] || '').join(' ').trim();
-    } else {
-      const k = r.findIndex(who); sid = k >= 0 ? who(r[k]) : null;
-      // 住所らしいセルから右へ、メール・電話・郵便番号でないセルをつなぐ（「岡山市北区…」「1-2-3」「○○マンション101」と分かれていても読む）
-      const rest = r.map((c, x) => ({ c, x })).filter(o => o.x !== k && o.c && !/@/.test(o.c) && !/^〒?\s*\d{3}-?\d{4}$/.test(o.c) && !/^[\d\-()（） ]{10,}$/.test(o.c) && !(sid && nz(o.c) === nz(all[sid].name)));
-      const a0 = rest.findIndex(o => ADDR_RE.test(o.c));
-      addr = (a0 >= 0 ? rest.slice(a0) : rest).map(o => o.c).join(' ').trim();
-    }
-    if (!addr) continue;
-    if (sid) out.push({ sid, from: addr }); else miss.push({ row: r.join(' '), from: addr });
+  let n = 0;
+  if (rows.some(r => r.some(who))) {
+    // 学籍番号か名前の列がある＝その学生の行へ
+    rows.forEach(r => {
+      const k = r.findIndex(who); if (k < 0) return;
+      const sid = who(r[k]), tr = $('addr-grid').querySelector(`tr[data-sid="${CSS.escape(sid)}"]`); if (!tr) return;
+      const rest = r.map((c, x) => x === k || nz(c) === nz(all[sid].name) ? '' : c);
+      let home, jk;
+      if (homeCols) { home = homeCols.map(x => rest[x] || '').join(' ').trim(); jk = jkCol >= 0 ? rest[jkCol] || '' : ''; }
+      else { const cs = addrCells(rest); home = cs[0] || ''; jk = cs[1] || ''; }
+      const ins = tr.querySelectorAll('input');
+      if (home) { ins[0].value = home; n++; } if (jk) { ins[1].value = jk; n++; }
+    });
+    toast(n ? `学籍番号・名前で ${n}セル入れた` : '学籍番号・名前が合う行が無い');
+  } else {
+    // 住所だけ＝選んだセルから右下へ
+    const r0 = +t.dataset.r, c0 = +t.dataset.c;
+    rows.forEach((r, i) => r.slice(0, 2 - c0).forEach((v, j) => { const el = gridCell(r0 + i, c0 + j); if (el) { el.value = v; n++; } }));
+    const over = rows.length - (addrGridSids().length - r0);
+    toast(over > 0 ? `${n}セル入れた（${over}行は学生の数を超えたので入れていない）` : `${n}セル入れた`);
   }
-  return { out, miss };
-}
-$('addr-paste').onclick = () => openPaste('住所を読み込む（保存しない）', 'Excel の表をそのまま貼る（1行＝1人・見出し行があってもよい）。学籍番号か名前の列で学生を決める。住所が「市区町村」「番地」「建物」に分かれていてもつなぐ。住所だけの列なら学籍番号の順に当てる（先に確かめる）。住所はこの画面の中だけに持ち、保存しない（画面を離れると消える）。読み込んだら「まだの分を計算」で住所からの分を出す。', async (rows, raw) => {
-  let { out: list, miss } = readAddrRows(raw);
-  if (!list.length && miss.length) {
-    // 住所だけ：学籍番号の順に当てる
-    const sids = Object.keys(students()).sort();
-    const n = Math.min(sids.length, miss.length);
-    const pairs = miss.slice(0, n).map((m, i) => ({ sid: sids[i], from: m.from }));
-    const show = pairs.map(p => `${p.sid} ${students()[p.sid].name || ''} ← ${p.from}`).join('\n');
-    if (!confirm(`学籍番号・名前の列が無いので、学籍番号の順に当てる。合っている？\n（住所 ${miss.length}行・学生 ${sids.length}人${miss.length !== sids.length ? '＝数が合っていない' : ''}）\n\n` + show)) return;
-    list = pairs; miss = [];
-  }
-  if (!list.length) return toast('住所が読めない');
-  S.addr = S.addr || {}; list.forEach(x => S.addr[x.sid] = x.from);
-  renderCalc();
-  const go = confirm(`${list.length}人の住所を読み込んだ（保存していない）。` + (miss.length ? `\n\n学生が決まらなかった行（学籍番号・名前が合わない）：\n${miss.map(m => m.row.slice(0, 40)).join('\n')}\n` : '') + '\n\nこのまま「まだの分を計算」する？');
-  if (go) askRun({}, 'todo', '全部');
+  addrGridCount();
 });
+// Enter・上下の矢印で上下に動く（Excel と同じ。Shift+Enter で上）
+$('addr-grid').addEventListener('keydown', e => {
+  const t = e.target; if (!t.matches || !t.matches('input[data-r]') || e.isComposing) return;
+  const go = e.key === 'Enter' ? (e.shiftKey ? -1 : 1) : e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
+  if (!go) return;
+  e.preventDefault(); const el = gridCell(+t.dataset.r + go, +t.dataset.c); if (el) { el.focus(); el.select(); }
+});
+$('addr-grid').addEventListener('input', addrGridCount);
+$('addr-grid-clear').onclick = () => { if (!confirm('表の住所を全部消す？')) return; $('addr-grid').querySelectorAll('input').forEach(i => i.value = ''); addrGridCount(); };
+async function saveAddrGrid() {
+  S.addr = {}; S.addrJk = {};
+  $('addr-grid').querySelectorAll('tr[data-sid]').forEach(tr => {
+    const sid = tr.dataset.sid, ins = tr.querySelectorAll('input'), a = ins[0].value.trim(), b = ins[1].value.trim();
+    if (a) S.addr[sid] = a; if (b) S.addrJk[sid] = b;
+  });
+  // 実家の住所を入れたのに「実家から可」になっていない学生
+  const ng = Object.keys(S.addrJk).filter(sid => !jkOk(sid));
+  if (ng.length && confirm(`実家の住所を入れた学生のうち ${ng.length}人は「実家から可」になっていない。\n${ng.map(sid => sid + ' ' + (students()[sid].name || '')).join('\n')}\n\n「実家から可」にする？（しないと実家の住所は計算に使わない）`)) {
+    const up = {}; ng.forEach(sid => up[ypath(`students/${sid}/jk/ok`)] = true);
+    await db.ref().update(up);
+  }
+  renderCalc();
+  const n0 = Object.keys(S.addr).length, n1 = Object.keys(S.addrJk).filter(jkOk).length;
+  if (!n0 && !n1) return toast('住所を空にした');
+  if (confirm(`住所を入れた（ふだん ${n0}人・実家 ${n1}人・保存していない）。\n\nこのまま「まだの分を計算」する？`)) askRun({}, 'todo', '全部');
+}
+$('addr-paste').onclick = openAddrGrid;
 
 // ===== 4. 割り振り =====
 function renderAsg() {
@@ -1095,8 +1152,8 @@ function openDetail(sid, fid) {
   if (!ev.opts.length) h += `<p>${ev.errs.length ? esc(ev.errs.join('／')) : 'まだ計算していない（3. 計算）'}</p>`;
   for (const o of ev.opts) {
     const mk = mark(o.total);
-    h += `<div class="box"><b><span class="mk ${mk.c}">${mk.m}</span> ${o.k === '車' ? '車で直接' : o.k === '住所から' ? '家の住所から（電車・バス）' : o.k + 'の駅から'}：${fmtMin(o.total)}</b>`;
-    if (o.k === '住所から') {
+    h += `<div class="box"><b><span class="mk ${mk.c}">${mk.m}</span> ${o.k === '車' ? '車で直接' : o.k === '住所から' ? '家の住所から（電車・バス）' : o.k === '実家の住所から' ? '実家の住所から（電車・バス）' : o.k + 'の駅から'}：${fmtMin(o.total)}</b>`;
+    if (o.d) {
       const d = o.d;
       h += `<table class="dt" style="margin-top:6px">
         <tr><td>出る→着く</td><td>${esc(d.dep || '?')}発 → ${esc(d.arr || '?')}着（${esc(d.arrive || '')}までに着く便・乗換${d.transfers ?? 0}回${d.shinkansen ? '・新幹線' : ''}）</td></tr>
@@ -1133,7 +1190,7 @@ function unpoly(str) {
 // 大まかな経路を地図に描く（就職マップと同じ地図）：電車・バスは色の実線、歩きは点線。乗る所・降りる所に名前（家から乗る所までの線は持っていない）
 async function drawRoute(el, o, f, fid) {
   const walkOk = (f.access || '徒歩') === '徒歩';
-  const segs = o.k === '住所から' ? (o.d.poly || []) : (o.r.poly || []).concat(o.r.poly && f.walkPoly && walkOk ? [{ m: 'W', p: f.walkPoly }] : []);
+  const segs = o.d ? (o.d.poly || []) : (o.r.poly || []).concat(o.r.poly && f.walkPoly && walkOk ? [{ m: 'W', p: f.walkPoly }] : []);
   if (!segs.length || !window.maplibregl) { el.outerHTML = `<div class="hint" style="margin:6px 0 0">${window.maplibregl ? '地図の線が無い（地図の機能より前に計算した）。3. 計算の表でこのマスを押して「上書き」でやり直すと出る。' : '地図を読み込めなかった（ネットにつながっているか）。'}</div>`; return; }
   // 施設の場所（前の計算では持っていない＝1回だけ調べて残す。施設の住所なので残してよい）
   if (!f.loc && f.address && S.settings.gasUrl) {

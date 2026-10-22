@@ -190,3 +190,13 @@ td.cg i, .hint i { font-style: normal; font-size: 10px; color: var(--ok); margin
 .slip .sign { margin-top: 8mm; border-top: 1.5px solid #000; padding-top: 4mm; line-height: 2.6; }
 .list h1 { font-size: 15pt; margin: 0 0 3mm; }
 .list .meta { font-size: 9pt; color: #333; margin-bottom: 3mm; }
+
+/* 住所の表（Excel のようなセル） */
+#dlg-addr { max-width: 1000px; }
+.addr-wrap { max-height: 60vh; overflow: auto; border: 1px solid var(--line); }
+.addr-grid { border-collapse: collapse; width: 100%; font-size: 13px; }
+.addr-grid th { position: sticky; top: 0; background: #f3f4f6; z-index: 1; text-align: left; }
+.addr-grid th, .addr-grid td { border: 1px solid var(--line); padding: 0 6px; white-space: nowrap; height: 28px; }
+.addr-grid td:nth-child(3), .addr-grid td:nth-child(4) { padding: 0; width: 38%; }
+.addr-grid input { width: 100%; height: 28px; border: 0; padding: 0 6px; box-sizing: border-box; font: inherit; background: transparent; }
+.addr-grid input:focus { outline: 2px solid #2563eb; outline-offset: -2px; background: #eff6ff; }

@@ -212,10 +212,17 @@
   <div class="foot"><button value="cancel">やめる</button><button class="primary" value="ok">取り込む</button></div>
 </form></dialog>
 
+<dialog id="dlg-addr"><form method="dialog">
+  <h2 style="margin-top:0">住所を入れる（保存しない）</h2>
+  <p class="hint">Excel で住所の列をコピーし、入れ始めるセルを押してから貼る（Ctrl+V）。ふだんと実家の2列を一度にコピーしてもよい。学籍番号か名前の列ごとコピーすると、その学生の行に入る（順番が違っても合う）。手で打ってもよい（Enter で下へ）。住所はこの画面の中だけに持ち、保存しない（画面を離れると消える）。</p>
+  <div class="addr-wrap"><table id="addr-grid" class="addr-grid"></table></div>
+  <div class="foot"><span class="hint" id="addr-grid-n" style="margin:0;align-self:center"></span><span style="flex:1"></span><button type="button" id="addr-grid-clear">表を空にする</button><button value="cancel">やめる</button><button class="primary" value="ok">この住所で使う</button></div>
+</form></dialog>
+
 <dialog id="dlg-scope"><form method="dialog">
   <h2 style="margin-top:0" id="scope-title"></h2>
   <p class="hint" id="scope-info"></p>
-  <div id="scope-addr-row" class="grid"><label>住所（保存しない）</label><input type="text" id="scope-addr" autocomplete="off" placeholder="入れると住所から出す。空なら駅の見積もり"></div>
+  <div id="scope-addr-row" class="grid"><label>住所（保存しない）</label><input type="text" id="scope-addr" autocomplete="off" placeholder="入れると住所から出す。空なら駅の見積もり"><label>実家の住所（保存しない）</label><input type="text" id="scope-addr-jk" autocomplete="off" placeholder="実家から可の学生だけ使う"></div>
   <div class="foot"><button class="primary" value="todo">まだの分を計算</button><button value="ng">経路なしだけやり直す</button><button value="all">上書きでやり直す</button><span style="flex:1"></span><button value="cancel">やめる</button></div>
 </form></dialog>
 
