@@ -29,7 +29,8 @@ function makeForm() {
     .setHelpText('家を出てから駅のホーム（バス停）に着くまで、約何分か。数字だけ');
   form.addMultipleChoiceItem().setTitle('車で実習先まで直接通えますか').setHelpText('自分で運転して、車を使える')
     .setChoiceValues(['はい', 'いいえ']).setRequired(true);
-  const jk = form.addMultipleChoiceItem().setTitle('実家からの実習').setRequired(true);
+  const jk = form.addMultipleChoiceItem().setTitle('実家からの実習').setRequired(true)
+    .setHelpText('いま実家から通っている人は「いま実家に住んでいる」を選ぶ（実家の質問は出ない＝上の駅が実家の駅）');
 
   const pgJk = form.addPageBreakItem().setTitle('実家から通うとき');
   form.addTextItem().setTitle('実家の最寄りの駅・バス停の名前').setRequired(true);
@@ -39,7 +40,7 @@ function makeForm() {
 
   const pgEnd = form.addPageBreakItem().setTitle('さいごに');
   form.addCheckboxItem().setTitle('確認').setChoiceValues(['実習中は、上の駅・方法で通います']).setRequired(true);
-  jk.setChoices([jk.createChoice('可（実家から通ってもよい）', pgJk), jk.createChoice('不可', pgEnd)]);
+  jk.setChoices([jk.createChoice('可（実家から通ってもよい）', pgJk), jk.createChoice('不可', pgEnd), jk.createChoice('いま実家に住んでいる', pgEnd)]);
 
   const ss = SpreadsheetApp.create(year + '年度 実習の通学 確認フォーム（回答）');
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());

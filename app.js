@@ -1277,7 +1277,8 @@ function slipHtml(sid, s) {
       <p class="note">実習中に乗る駅を書く。地図で一番近い駅でなくてよい（ふだん使っている駅）。</p></div>
     <div class="q"><div class="t">2. その駅までの手段と時間</div>${opt(MODES)}<br>家を出てから駅のホームまで　約 <span class="ln s"></span> 分</div>
     <div class="q"><div class="t">3. 車で実習先まで直接通えますか（自分で運転・車を使える）</div>${opt(['はい', 'いいえ'])}</div>
-    <div class="q"><div class="t">4. 実家からの実習</div>${opt(['可（実家から通ってもよい）', '不可'])}
+    <div class="q"><div class="t">4. 実家からの実習</div>${opt(['可（実家から通ってもよい）', '不可', 'いま実家に住んでいる'])}
+      <p class="note">いま実家から通っている人は「いま実家に住んでいる」に○をして、下は書かなくてよい（1. の駅が実家の駅）。</p>
       <div>「可」のとき：実家の最寄り駅 <span class="ln"></span> 駅　手段 ${opt(MODES)}　約 <span class="ln s"></span> 分</div>
       <p class="note">住所は書かない（学校がすでに持っている）。</p></div>
     <div class="sign">実習中は、上の駅・方法で通います。<br>
