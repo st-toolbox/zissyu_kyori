@@ -76,6 +76,14 @@ main > section.on { display: block; }
 .fill span { font-size: 11px; border: 1px solid var(--line); background: var(--paper); padding: 1px 6px; border-radius: 3px; }
 .fill span.full { background: var(--main-l); border-color: var(--main); }
 .fill span.over { background: #fdf3f2; border-color: var(--bad); color: var(--bad); }
+.fill span.zero { background: #fdf3f2; border-color: var(--bad); color: var(--bad); font-weight: 700; }
+.fill span.tight { background: #fdf8ee; border-color: var(--warn); color: var(--warn); font-weight: 700; }
+.fill span.few { background: #f2f7fb; border-color: var(--ok); color: var(--ok); }
+.fill span.lg { border: none; background: none; color: var(--sub, #666); flex-basis: 100%; padding: 0; }
+.fill span.lg i { display: inline-block; width: 10px; height: 10px; border: 1px solid; border-radius: 2px; vertical-align: -1px; margin: 0 2px 0 8px; }
+.fill span.lg i.zero { background: #fdf3f2; border-color: var(--bad); }
+.fill span.lg i.tight { background: #fdf8ee; border-color: var(--warn); }
+.fill span.lg i.few { background: #f2f7fb; border-color: var(--ok); }
 .board { display: grid; grid-template-columns: 290px 1fr; gap: 12px; align-items: start; }
 .slist { background: var(--paper); border: 1px solid var(--line); max-height: 70vh; overflow-y: auto; }
 .slist .it { padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }

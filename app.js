@@ -1049,7 +1049,19 @@ function renderAsg() {
 
   // 施設の埋まり具合
   const cnt = {}; placed.forEach(sid => cnt[A[sid].fid] = (cnt[A[sid].fid] || 0) + 1);
-  $('asg-fill').innerHTML = fids.map(fid => { const cap = num(yFac(fid).cap[t]), c = cnt[fid] || 0; return `<span class="${c > cap ? 'over' : c === cap ? 'full' : ''}">${esc(S.facilities[fid].name)} ${c}/${cap}</span>`; }).join('');
+  // 枠が残っている施設：宿泊なしで通える「まだ決まっていない人」が残りの枠より少ない・通える人がもともと少ない、なら色で知らせる
+  $('asg-fill').innerHTML = fids.map(fid => {
+    const cap = num(yFac(fid).cap[t]), c = cnt[fid] || 0, rest = cap - c;
+    const rs = reachersOf(fid, evs), free = rs.filter(sid => !A[sid]);
+    let cls = c > cap ? 'over' : c === cap ? 'full' : '', tip = '';
+    if (rest > 0) {
+      if (!free.length) { cls = 'zero'; tip = '通えるまだ決まっていない人がいない'; }
+      else if (free.length <= rest) { cls = 'tight'; tip = `残り${rest}枠に通える人${free.length}人`; }
+      else if (rs.length <= 3) { cls = 'few'; tip = `通えるのは${rs.length}人だけ`; }
+      if (free.length) tip += `（${free.map(sid => students()[sid].name).join('・')}）`;
+    }
+    return `<span class="${cls}"${tip ? ` title="${esc(tip)}"` : ''}>${esc(S.facilities[fid].name)} ${c}/${cap}</span>`;
+  }).join('') + '<span class="lg"><i class="zero"></i>通える人がもういない <i class="tight"></i>通える人が残りの枠以下 <i class="few"></i>通えるのが3人以下（宿泊なし・名前にマウスで誰か）</span>';
 
   // 学生の一覧
   const reach = sid => fids.filter(fid => !isStay(evs[sid][fid])).length;
