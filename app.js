@@ -160,6 +160,7 @@ const rKey = (a, b, arr) => fk(a) + '__' + fk(b) + '__' + arr.replace(':', '');
 // バス停・電停は同じ名前の駅と別の経路として持つ
 const bKey = b => isTrain(b.kind) ? b.st : b.st + '〔' + b.kind + '〕';
 const doorOf = (sid, fid) => (((Y().door || {})[sid]) || {})[fid];
+const hasDoor = sid => ['door', 'doorJk'].some(k => Object.keys(((Y()[k] || {})[sid]) || {}).length > 0);   // 住所から分が出ている＝駅が空でも通える先がある
 const doorJkOf = (sid, fid) => (((Y().doorJk || {})[sid]) || {})[fid];   // 実家の住所から
 // 住所から：施設に着きたい時刻＝始業−ゆとり
 function doorArrive(fid) {
@@ -1059,7 +1060,7 @@ function renderAsg() {
     const s = students()[sid], a = A[sid], f = a && S.facilities[a.fid];
     let sub = `通える施設 ${reach(sid)}`;
     if (f) { const ev = evs[sid][a.fid]; const mk = mark(ev.best && ev.best.total); sub = `<span class="mk ${mk.c}">${mk.m}</span>${esc(f.name)} ${fmtMin(ev.best && ev.best.total)}`; }
-    return `<div class="it ${sid === S.sel ? 'sel' : ''}" data-sid="${esc(sid)}"><div class="nm">${esc(s.name)}${s.ped ? '<span class="tag blu">小児希望</span>' : ''}${bases(s).length ? '' : '<span class="tag red">駅が未入力</span>'}</div><div class="sub">${sub}</div></div>`;
+    return `<div class="it ${sid === S.sel ? 'sel' : ''}" data-sid="${esc(sid)}"><div class="nm">${esc(s.name)}${s.ped ? '<span class="tag blu">小児希望</span>' : ''}${bases(s).length || hasDoor(sid) ? '' : '<span class="tag red">駅が未入力</span>'}</div><div class="sub">${sub}</div></div>`;
   }).join('') || '<div class="it hint">この種別の学生がいない（学生の画面で「この年度の実習」に印）</div>';
 
   renderCands(fids, evs, A, cnt, lock);
