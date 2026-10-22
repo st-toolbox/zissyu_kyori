@@ -1060,8 +1060,11 @@ function renderAsg() {
       else if (rs.length <= 3) { cls = 'few'; tip = `通えるのは${rs.length}人だけ`; }
       if (free.length) tip += `（${free.map(sid => students()[sid].name).join('・')}）`;
     }
-    return `<span class="${cls}"${tip ? ` title="${esc(tip)}"` : ''}>${esc(S.facilities[fid].name)} ${c}/${cap}</span>`;
+    tip = (tip ? tip + '\n' : '') + '押すと通える学生の一覧';
+    return `<span class="${cls}${S.facOpen === fid ? ' on' : ''}" data-fid="${esc(fid)}" title="${esc(tip)}">${esc(S.facilities[fid].name)} ${c}/${cap}</span>`;
   }).join('') + '<span class="lg"><i class="zero"></i>通える人がもういない <i class="tight"></i>通える人が残りの枠以下 <i class="few"></i>通えるのが3人以下（宿泊なし・名前にマウスで誰か）</span>';
+
+  renderFacPop(fids, evs, A, cnt);
 
   // 学生の一覧
   const reach = sid => fids.filter(fid => !isStay(evs[sid][fid])).length;
@@ -1081,6 +1084,22 @@ function renderAsg() {
 }
 
 // 施設ごとに「宿泊なしで通える学生」
+// 施設の札を押したとき：その施設に宿泊なしで通える学生（近い順）と、今どこに決まっているか
+function renderFacPop(fids, evs, A, cnt) {
+  const box = $('asg-fac'), fid = S.facOpen;
+  if (!fid || !fids.includes(fid)) { S.facOpen = null; box.innerHTML = ''; box.hidden = true; return; }
+  const t = S.type, cap = num(yFac(fid).cap[t]), c = cnt[fid] || 0;
+  const rs = reachersOf(fid, evs).sort((a, b) => evs[a][fid].best.total - evs[b][fid].best.total);
+  const stayN = Object.keys(evs).filter(sid => evs[sid][fid] && evs[sid][fid].best && isStay(evs[sid][fid])).length;
+  const rows = rs.map(sid => {
+    const ev = evs[sid][fid], mk = mark(ev.best.total), cur = A[sid] && S.facilities[A[sid].fid] ? A[sid].fid : null;
+    const st = !cur ? '<span class="tag yel">まだ決まっていない</span>' : cur === fid ? '<span class="tag grn">ここに決定</span>' : `<span class="hint">${esc(S.facilities[cur].name)}に決定</span>`;
+    return `<tr class="clk" data-sid="${esc(sid)}"><td>${esc(students()[sid].name)}${students()[sid].ped ? ' <span class="tag blu">小児希望</span>' : ''}</td><td class="${mk.c}">${mk.m} ${fmtMin(ev.best.total)}</td><td>${st}</td></tr>`;
+  }).join('');
+  box.hidden = false;
+  box.innerHTML = `<div class="hd"><b>${esc(S.facilities[fid].name)}</b> <span class="hint">枠 ${c}/${cap}・宿泊なしで通える ${rs.length}人${stayN ? `（宿泊なら ほか${stayN}人）` : ''}・名前を押すとその学生の候補へ</span><button class="small" id="asg-fac-x">閉じる</button></div>` +
+    (rs.length ? `<table>${rows}</table>` : '<div class="hint">宿泊なしで通える学生はいない</div>');
+}
 function reachersOf(fid, evs) { return Object.keys(evs).filter(sid => evs[sid][fid] && !isStay(evs[sid][fid])); }
 
 function renderCands(fids, evs, A, cnt, lock) {
@@ -1141,6 +1160,11 @@ $('asg-tabs').onclick = async e => {
   if (b.id === 'asg-unlock' && confirm('確定を外す？')) await db.ref(ypath('locks/' + S.type)).remove().catch(fail);
 };
 $('asg-sort').onchange = e => { S.sort = e.target.value; renderAsg(); };
+$('asg-fill').onclick = e => { const b = e.target.closest('span[data-fid]'); if (!b) return; S.facOpen = S.facOpen === b.dataset.fid ? null : b.dataset.fid; renderAsg(); };
+$('asg-fac').onclick = e => {
+  if (e.target.closest('#asg-fac-x')) { S.facOpen = null; return renderAsg(); }
+  const tr = e.target.closest('tr[data-sid]'); if (tr) { S.sel = tr.dataset.sid; renderAsg(); }
+};
 $('asg-list').onclick = e => { const it = e.target.closest('.it[data-sid]'); if (it) { S.sel = it.dataset.sid; renderAsg(); } };
 $('asg-cands').onclick = async e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;

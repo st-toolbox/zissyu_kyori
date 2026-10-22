@@ -208,3 +208,12 @@ td.cg i, .hint i { font-style: normal; font-size: 10px; color: var(--ok); margin
 .addr-grid td:nth-child(3), .addr-grid td:nth-child(4) { padding: 0; width: 38%; }
 .addr-grid input { width: 100%; height: 28px; border: 0; padding: 0 6px; box-sizing: border-box; font: inherit; background: transparent; }
 .addr-grid input:focus { outline: 2px solid #2563eb; outline-offset: -2px; background: #eff6ff; }
+
+.fill span[data-fid] { cursor: pointer; }
+.fill span.on { outline: 2px solid var(--main); outline-offset: 1px; }
+.facpop { border: 1px solid var(--line); background: var(--paper); padding: 8px 10px; margin: -4px 0 10px; border-radius: 3px; }
+.facpop .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.facpop .hd button { margin-left: auto; }
+.facpop table { width: auto; }
+.facpop td { padding: 3px 10px 3px 0; font-size: 13px; }
+@media print { .facpop { display: none; } }
