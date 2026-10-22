@@ -217,3 +217,7 @@ td.cg i, .hint i { font-style: normal; font-size: 10px; color: var(--ok); margin
 .facpop table { width: auto; }
 .facpop td { padding: 3px 10px 3px 0; font-size: 13px; }
 @media print { .facpop { display: none; } }
+#asg-stats .clk { cursor: pointer; border-radius: 3px; padding: 2px 6px; margin: -2px -6px; }
+#asg-stats .clk:hover { background: var(--main-l); }
+#asg-stats .clk.on { outline: 2px solid var(--main); outline-offset: 2px; }
+#asg-placed { margin: 0 0 10px; }
