@@ -160,6 +160,8 @@ const rKey = (a, b, arr) => fk(a) + '__' + fk(b) + '__' + arr.replace(':', '');
 // バス停・電停は同じ名前の駅と別の経路として持つ
 const bKey = b => isTrain(b.kind) ? b.st : b.st + '〔' + b.kind + '〕';
 const doorOf = (sid, fid) => (((Y().door || {})[sid]) || {})[fid];
+// 住所からの経路（駅を通さない）の内訳の1行
+const doorBrk = o => `${o.k === '実家の住所から' ? '実家の住所から' : '住所から'}：歩き${o.d.walk1 ?? 0} ＋ ${o.d.lines ? '電車・バス' + (o.d.transfers ? '（乗換' + o.d.transfers + '）' : '') : '歩きだけ'} ＋ 歩き${o.d.walk2 ?? 0}`;
 const hasDoor = sid => ['door', 'doorJk'].some(k => Object.keys(((Y()[k] || {})[sid]) || {}).length > 0);   // 住所から分が出ている＝駅が空でも通える先がある
 const doorJkOf = (sid, fid) => (((Y().doorJk || {})[sid]) || {})[fid];   // 実家の住所から
 // 住所から：施設に着きたい時刻＝始業−ゆとり
@@ -1094,12 +1096,13 @@ function renderCands(fids, evs, A, cnt, lock) {
     const b = r.ev.best, mk = mark(b && b.total);
     let brk = '';
     if (b && b.k === '車') brk = '車で直接';
+    else if (b && b.d) brk = esc(doorBrk(b));
     else if (b) brk = `${b.k === '実家' ? '実家から：' : ''}①${esc(b.b.mode)}${b.b.min} ＋ ②電車・バス${b.r.ride}${b.r.transfers ? '（乗換' + b.r.transfers + '）' : ''} ＋ ③${esc(r.f.access && r.f.access !== '徒歩' ? r.f.access : '徒歩')}${b.l3}`;
     else if (r.ev.errs.length) brk = esc(r.ev.errs.join('／'));
     else brk = '未計算';
     const tags = [];
-    if (b && b.k === '実家') tags.push('<span class="tag grn">実家から</span>');
-    if (b && b.r && b.r.shinkansen) tags.push('<span class="tag yel">新幹線</span>');
+    if (b && (b.k === '実家' || b.k === '実家の住所から')) tags.push('<span class="tag grn">実家から</span>');
+    if (b && ((b.r && b.r.shinkansen) || (b.d && b.d.shinkansen))) tags.push('<span class="tag yel">新幹線</span>');
     if (r.full) tags.push('<span class="tag">受入いっぱい</span>');
     if (r.wasPast) tags.push('<span class="tag">過去に行った</span>');
     if (s.ped && !r.f.pediatric) tags.push('<span class="tag yel">小児でない</span>');
@@ -1266,9 +1269,9 @@ function listHtml(t) {
     if (!who.length) { h += `<tr><td>${esc(f.name)}</td><td>${esc(stName(f.station || ''))}</td><td>${esc(startOf(fid))}</td><td colspan="4" style="color:#888">（なし）</td></tr>`; continue; }
     who.forEach((sid, i) => {
       const ev = evalPair(sid, fid), b = ev.best, mk = mark(b && b.total);
-      const brk = !b ? '' : b.k === '車' ? '車で直接' : `${b.k === '実家' ? '実家・' : ''}${stName(b.b.st)}駅 ${b.b.mode}${b.b.min}＋電車${b.r.ride}＋${b.l3}`;
+      const brk = !b ? '' : b.k === '車' ? '車で直接' : b.d ? doorBrk(b) : `${b.k === '実家' ? '実家・' : ''}${stName(b.b.st)}駅 ${b.b.mode}${b.b.min}＋電車${b.r.ride}＋${b.l3}`;
       h += `<tr>${i === 0 ? `<td rowspan="${who.length}">${esc(f.name)}</td><td rowspan="${who.length}">${esc(stName(f.station || ''))}</td><td rowspan="${who.length}">${esc(startOf(fid))}</td>` : ''}
-        <td>${esc(students()[sid].name)}</td><td class="num">${fmtMin(b && b.total)}</td><td>${esc(brk)}</td><td>${mk.m}${b && b.r && b.r.shinkansen ? ' 新幹線' : ''}${isStay(ev) ? ' 宿泊' : ''}</td></tr>`;
+        <td>${esc(students()[sid].name)}</td><td class="num">${fmtMin(b && b.total)}</td><td>${esc(brk)}</td><td>${mk.m}${b && ((b.r && b.r.shinkansen) || (b.d && b.d.shinkansen)) ? ' 新幹線' : ''}${isStay(ev) ? ' 宿泊' : ''}</td></tr>`;
     });
   }
   const un = studsOf(t).filter(sid => !A[sid] || !S.facilities[A[sid].fid]);
