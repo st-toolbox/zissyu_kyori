@@ -615,12 +615,20 @@ async function importForm(rows) {
   const head = (rows[0] || []).map(c => c.trim()), col = {};
   for (const [k, t] of Object.entries(FORM_Q)) col[k] = head.indexOf(t);
   if (col.sid < 0 || col.st < 0) return alert('見出しの行が見つからない。1行目（タイムスタンプ・学籍番号…）からコピーして貼る');
-  const up = {}, seen = {}; let n = 0, skip = 0;
+  const up = {}, seen = {}, miss = []; let n = 0, skip = 0;
+  // 学籍番号はアプリの名簿のものを変えない：番号が名簿に無ければ名前で名簿の学生に当てる・当たらなければ取り込まない（名簿が空の年度だけ新しく足す）
+  const roster = students(), hasRoster = Object.keys(roster).length > 0;
+  const nId = v => fk(String(v || '').normalize('NFKC').toUpperCase()), nNm = v => String(v || '').normalize('NFKC').replace(/\s/g, '');
+  const byId = {}, byName = {};
+  Object.entries(roster).forEach(([sid, x]) => { byId[nId(sid)] = sid; const k = nNm(x.name); if (k) (byName[k] = byName[k] || []).push(sid); });
   for (const r of rows.slice(1)) {
     const g = k => col[k] < 0 || r[col[k]] === undefined ? '' : String(r[col[k]]).trim();
-    const id = fk(g('sid')); if (!id) { skip++; continue; }
-    const s = { ...(seen[id] || students()[id] || {}) };   // 同じ人が2回答えていたら後の行（新しい方）で上書き
-    if (g('name')) s.name = g('name');
+    if (!g('sid') && !g('name')) { skip++; continue; }
+    let id = byId[nId(g('sid'))];
+    if (!id) { const c = byName[nNm(g('name'))]; if (c && c.length === 1) id = c[0]; }
+    if (!id) { if (hasRoster) { miss.push(`${g('sid') || '（番号なし）'} ${g('name')}`); continue; } id = fk(g('sid')); if (!id) { skip++; continue; } }
+    const s = { ...(seen[id] || roster[id] || {}) };   // 同じ人が2回答えていたら後の行（新しい方）で上書き
+    if (g('name') && !roster[id]) s.name = g('name');   // 名簿にいる学生の名前もそのまま
     if (g('ped')) s.ped = /^希望する/.test(g('ped'));   // 2026-10-22 フォームに足した設問（前の回答には無い＝今の値のまま）
     const st = stClean(g('st'), formKind(g('kind'))), kind = formKind(g('kind'));
     if (st !== stClean(s.st, s.stKind) || kind !== (s.stKind || '電車')) { s.stLoc = null; s.stAddr = null; }
@@ -641,6 +649,7 @@ async function importForm(rows) {
     seen[id] = s; up[ypath('students/' + id)] = s;
   }
   n = Object.keys(seen).length;
+  if (miss.length) alert(`名簿の学籍番号にも名前にも当たらない回答が${miss.length}件＝取り込んでいない（学籍番号は名簿のものを使う）。\n${miss.join('\n')}\n\n学生の画面で名簿の名前を回答と同じにするか、学生を足してからもう一度取り込む`);
   if (!n) return toast('取り込める回答がなかった');
   const nNew = Object.values(seen).filter(s => !Object.values(s.t || {}).some(Boolean)).length;
   await db.ref().update(up);
