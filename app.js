@@ -533,10 +533,13 @@ function openStu(sid) {
 const STU_COLS = ['学籍番号', '名前', '学年', '評価', '総合', '見学', '小児希望', 'ふだんの駅', '駅までの手段', '駅までの分', '車で直接', '実家から可', '実家の駅', '実家の手段', '実家の分', '確認票回収日', '過去の実習先'];
 $('stu-paste').onclick = () => openPaste('学生を表から貼り付け', '列の順：' + STU_COLS.join('・') + '。○/1/可 を「はい」と読む。住所の列は作らない。同じ学籍番号はその行で上書き。', async rows => {
   const up = {}; let n = 0;
+  // 学籍番号は大文字小文字・全角半角を同じとみなし、名簿にある番号の書き方を残す（フォームの取り込みと同じ・2026-10-22）
+  const nId = v => fk(String(v || '').normalize('NFKC').toUpperCase());
+  const known = {}; Object.keys(students()).forEach(k => { known[nId(k)] = k; });
   for (const r of rows) {
     if (!r[0] || r[0] === '学籍番号') continue;
-    const id = fk(r[0]);
-    const s = { ...(students()[id] || {}) };
+    const id = known[nId(r[0])] || (known[nId(r[0])] = fk(r[0]));
+    const s = { ...(up[ypath('students/' + id)] || students()[id] || {}) };
     const g = i => (r[i] === undefined ? '' : String(r[i]).trim());
     if (g(1)) s.name = g(1);
     if (g(2)) s.grade = g(2);
