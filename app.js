@@ -174,7 +174,7 @@ function doorArrive(fid) {
 function bases(s) {
   const out = [];
   if (s.st && num(s.min) != null) out.push({ k: 'ふだん', st: s.st, kind: s.stKind || '電車', loc: s.stLoc || null, mode: s.mode || '徒歩', min: num(s.min) });
-  if (s.jk && s.jk.ok && s.jk.st) out.push({ k: '実家', st: s.jk.st, kind: s.jk.kind || '電車', loc: s.jk.loc || null, mode: s.jk.mode || '徒歩', min: num(s.jk.min) || 0 });
+  if (!s.home && s.jk && s.jk.ok && s.jk.st) out.push({ k: '実家', st: s.jk.st, kind: s.jk.kind || '電車', loc: s.jk.loc || null, mode: s.jk.mode || '徒歩', min: num(s.jk.min) || 0 });
   return out;
 }
 
@@ -182,7 +182,7 @@ function bases(s) {
 function evalPair(sid, fid) {
   const s = students()[sid] || {}, f = S.facilities[fid] || {};
   const opts = []; let pending = false, errs = [];
-  const l3 = leg3(f), arr = arriveBy(fid), door = doorOf(sid, fid), dj = s.jk && s.jk.ok ? doorJkOf(sid, fid) : null;
+  const l3 = leg3(f), arr = arriveBy(fid), door = doorOf(sid, fid), dj = !s.home && s.jk && s.jk.ok ? doorJkOf(sid, fid) : null;
   // 住所からの分があれば、その駅の見積もりの代わりにそれを使う（最終）。実家は「実家から可」の学生だけ
   if (door && door.min != null) opts.push({ k: '住所から', total: door.min, d: door });
   else if (door && door.err) errs.push('住所から：' + door.err);
@@ -474,7 +474,7 @@ function renderStu() {
     h += `<tr class="clk" data-sid="${esc(sid)}"><td>${esc(sid)}</td><td>${esc(s.name)}<span class="hint"> ${esc(s.grade || '')}</span></td>
       <td>${TYPES.filter(t => (s.t || {})[t]).join('・')}</td><td>${s.ped ? '希望' : ''}</td>
       <td>${s.st ? esc(stLabel(s.st, s.stKind)) : '<span class="tag red">未</span>'}${Object.keys((Y().door || {})[sid] || {}).length ? ' <span class="tag">住所から済</span>' : ''}</td><td>${s.min != null ? esc(s.mode || '') + s.min + '分' : ''}</td>
-      <td>${s.carDirect ? '可' : ''}</td><td>${jk.ok ? '可：' + esc(stLabel(jk.st || '?', jk.kind)) + (jk.min != null ? '（' + esc(jk.mode || '') + jk.min + '分）' : '') : ''}</td>
+      <td>${s.carDirect ? '可' : ''}</td><td>${s.home ? '<span class="tag">いま実家に住んでいる</span>' : jk.ok ? '可：' + esc(stLabel(jk.st || '?', jk.kind)) + (jk.min != null ? '（' + esc(jk.mode || '') + jk.min + '分）' : '') + (jk.st && stClean(jk.st, jk.kind) === stClean(s.st, s.stKind) ? ' <span class="tag yel" title="実家の駅がふだんの駅と同じ。いま実家に住んでいるなら、押して「いま実家に住んでいる」にする">ふだんと同じ駅</span>' : '') : ''}</td>
       <td>${s.slip ? esc(s.slip) : '<span class="tag yel">未回収</span>'}</td></tr>`;
   }
   $('stu-table').innerHTML = h;
@@ -493,7 +493,7 @@ function openStu(sid) {
   fm.mode.value = s.mode || '徒歩';
   TYPES.forEach(t => fm['t' + t].checked = !!(s.t || {})[t]);
   fm.ped.checked = !!s.ped; fm.carDirect.checked = !!s.carDirect;
-  fm.jkOk.value = jk.ok ? '1' : ''; fm.jkSt.value = stClean(jk.st, jk.kind); fm.jkKind.value = jk.kind || '電車'; fm.jkMode.value = jk.mode || '徒歩'; fm.jkMin.value = jk.min == null ? '' : jk.min;
+  fm.jkOk.value = s.home ? 'home' : jk.ok ? '1' : ''; fm.jkSt.value = stClean(jk.st, jk.kind); fm.jkKind.value = jk.kind || '電車'; fm.jkMode.value = jk.mode || '徒歩'; fm.jkMin.value = jk.min == null ? '' : jk.min;
   $('stu-del').style.display = sid ? '' : 'none';
   $('stu-del').onclick = async () => {
     if (!confirm(`${s.name}を${S.year}年度から消す？（この年度の配置と車の分数も消える）`)) return;
@@ -515,6 +515,7 @@ function openStu(sid) {
       name: fm.name.value.trim(), grade: fm.grade.value.trim(), t, ped: fm.ped.checked,
       st, stKind, stLoc: same1 ? (old.stLoc || null) : null, stAddr: same1 ? (old.stAddr || null) : null,
       mode: fm.mode.value, min: num(fm.min.value), carDirect: fm.carDirect.checked,
+      home: fm.jkOk.value === 'home',
       jk: { ok: fm.jkOk.value === '1', st: jst, kind: jkind, mode: fm.jkMode.value, min: num(fm.jkMin.value),
         loc: same2 ? (oj.loc || null) : null, addr: same2 ? (oj.addr || null) : null },
       slip: fm.slip.value.trim(), past: fm.past.value.trim(),
@@ -546,7 +547,7 @@ $('stu-paste').onclick = () => openPaste('学生を表から貼り付け', '列�
     if (g(9)) s.min = num(g(9));
     if (g(10)) s.carDirect = yes(g(10));
     s.jk = { ...(s.jk || {}) };
-    if (g(11)) s.jk.ok = yes(g(11));
+    if (g(11)) { if (/実家に住/.test(g(11))) s.home = true; s.jk.ok = yes(g(11)) && !s.home; }
     if (g(12)) { const k = splitKind(g(12)); if (k.st !== stClean(s.jk.st, s.jk.kind) || k.kind !== (s.jk.kind || '電車')) { s.jk.loc = null; s.jk.addr = null; } s.jk.st = k.st; s.jk.kind = k.kind; }
     if (g(13)) s.jk.mode = MODES.includes(g(13)) ? g(13) : '徒歩';
     if (g(14)) s.jk.min = num(g(14));
@@ -626,7 +627,8 @@ async function importForm(rows) {
     s.st = st; s.stKind = kind;
     s.mode = MODES.includes(g('mode')) ? g('mode') : '徒歩'; s.min = num(g('min'));
     s.carDirect = g('car') === 'はい';
-    const jk = { ...(s.jk || {}) }; jk.ok = /^可/.test(g('jkOk'));
+    if (/実家に住/.test(g('jkOk'))) s.home = true;   // 先生が「いま実家に住んでいる」にした学生は、フォームで「可」でもそのまま
+    const jk = { ...(s.jk || {}) }; jk.ok = /^可/.test(g('jkOk')) && !s.home;
     if (jk.ok) {
       const js = stClean(g('jkSt'), formKind(g('jkKind'))), jkind = formKind(g('jkKind'));
       if (js !== stClean(jk.st, jk.kind) || jkind !== (jk.kind || '電車')) { jk.loc = null; jk.addr = null; }
@@ -701,7 +703,7 @@ const doorFacs = sid => Object.keys(S.facilities).filter(fid => S.facilities[fid
 const carFacs = sid => doorFacs(sid).filter(fid => S.facilities[fid].carOk);
 const addrOf = sid => (S.addr || {})[sid] || '';
 const addrJkOf = sid => (S.addrJk || {})[sid] || '';   // 実家の住所（これも保存しない）
-const jkOk = sid => !!(((students()[sid] || {}).jk || {}).ok);
+const jkOk = sid => { const s = students()[sid] || {}; return !s.home && !!(s.jk || {}).ok; };
 // 学生×施設の組（その学生の実習の種別で動いている施設）。scope で絞る
 function pairsOf(scope) {
   scope = scope || {}; const P = new Map();
@@ -946,7 +948,7 @@ function openAddrGrid() {
   if (!sids.length) return toast('学生がまだいない（2. 学生）');
   $('addr-grid').innerHTML = `<tr><th>学籍番号</th><th>名前</th><th>ふだんの住所</th><th>実家の住所</th></tr>` + sids.map((sid, r) => {
     const s = students()[sid];
-    return `<tr data-sid="${esc(sid)}"><td>${esc(sid)}</td><td>${esc(s.name || '')}${jkOk(sid) ? '' : ' <span class="tag" title="実家の住所を入れると、使うときに「実家から可」にするか聞く">実家 未</span>'}</td>` +
+    return `<tr data-sid="${esc(sid)}"><td>${esc(sid)}</td><td>${esc(s.name || '')}${s.home ? ' <span class="tag">実家に住んでいる</span>' : jkOk(sid) ? '' : ' <span class="tag" title="実家の住所を入れると、使うときに「実家から可」にするか聞く">実家 未</span>'}</td>` +
       `<td><input type="text" data-r="${r}" data-c="0" value="${esc(addrOf(sid))}" autocomplete="off"></td><td><input type="text" data-r="${r}" data-c="1" value="${esc(addrJkOf(sid))}" autocomplete="off"></td></tr>`;
   }).join('');
   addrGridCount();
@@ -1017,7 +1019,7 @@ async function saveAddrGrid() {
     if (a) S.addr[sid] = a; if (b) S.addrJk[sid] = b;
   });
   // 実家の住所を入れたのに「実家から可」になっていない学生
-  const ng = Object.keys(S.addrJk).filter(sid => !jkOk(sid));
+  const ng = Object.keys(S.addrJk).filter(sid => !jkOk(sid) && !(students()[sid] || {}).home);   // いま実家に住んでいる学生の実家の住所は使わない
   if (ng.length && confirm(`実家の住所を入れた学生のうち ${ng.length}人は「実家から可」になっていない。\n${ng.map(sid => sid + ' ' + (students()[sid].name || '')).join('\n')}\n\n「実家から可」にする？（しないと実家の住所は計算に使わない）`)) {
     const up = {}; ng.forEach(sid => up[ypath(`students/${sid}/jk/ok`)] = true);
     await db.ref().update(up);
@@ -1117,7 +1119,7 @@ function renderCands(fids, evs, A, cnt, lock) {
   const curF = cur && S.facilities[cur.fid];
   let h = `<div class="curbox"><b>${esc(s.name)}</b> <span class="hint">${esc(sid)}</span>
     <div class="hint" style="margin:4px 0 0">ふだん：${s.st ? esc(stName(s.st)) + '駅（' + esc(s.mode || '') + (s.min != null ? s.min + '分' : '?') + '）' : '未入力'}
-    ${s.jk && s.jk.ok ? '／実家から可：' + esc(stName(s.jk.st || '?')) + '駅' : ''}${s.carDirect ? '／車で直接可' : ''}${s.ped ? '／小児希望' : ''}</div>
+    ${s.home ? '／いま実家に住んでいる' : ''}${jkOk(sid) ? '／実家から可：' + esc(stName(s.jk.st || '?')) + '駅' : ''}${s.carDirect ? '／車で直接可' : ''}${s.ped ? '／小児希望' : ''}</div>
     ${curF ? `<div style="margin-top:6px">配置：<b>${esc(curF.name)}</b> <span class="hint">${esc(cur.by || '')} ${fmtAt(cur.at)}${cur.reason ? '／変更の理由：' + esc(cur.reason) : ''}</span>
       <button class="small danger" data-act="remove">外す</button></div>` : ''}</div>`;
   h += `<table class="cands"><tr><th></th><th>施設</th><th class="num">片道</th><th>内訳</th><th>印</th><th></th></tr>`;
