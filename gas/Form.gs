@@ -20,6 +20,7 @@ function makeForm() {
 
   form.addTextItem().setTitle('学籍番号').setRequired(true);
   form.addTextItem().setTitle('名前').setRequired(true);
+  form.addMultipleChoiceItem().setTitle('小児の希望').setChoiceValues(['希望する', '希望しない']).setRequired(true);
   form.addTextItem().setTitle('ふだん使う駅・バス停の名前').setRequired(true)
     .setHelpText('実習中に乗る所。地図で一番近い所でなくてよい（ふだん使っている所）。正式な名前で。駅なら「駅」は付けなくてよい');
   form.addMultipleChoiceItem().setTitle('その種類').setChoiceValues(KINDS).setRequired(true);

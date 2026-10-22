@@ -586,7 +586,7 @@ $('stu-tpl').onclick = () => {
 
 // Google フォーム（gas/Form.gs で作る）の回答の表を見出しごと貼る。見出しで読む＝列の順は問わない
 // ⚠️ 見出しは Form.gs の質問の文そのもの。メールアドレスの列は読まない（残さない）
-const FORM_Q = { ts: 'タイムスタンプ', sid: '学籍番号', name: '名前', st: 'ふだん使う駅・バス停の名前', kind: 'その種類', mode: 'そこまでの手段',
+const FORM_Q = { ts: 'タイムスタンプ', sid: '学籍番号', name: '名前', ped: '小児の希望', st: 'ふだん使う駅・バス停の名前', kind: 'その種類', mode: 'そこまでの手段',
   min: '家を出てから乗るまでの分', car: '車で実習先まで直接通えますか', jkOk: '実家からの実習',
   jkSt: '実家の最寄りの駅・バス停の名前', jkKind: '実家の駅の種類', jkMode: '実家から駅までの手段', jkMin: '実家を出てから乗るまでの分' };
 const formKind = v => /バス/.test(v) ? 'バス' : /路面|電停/.test(v) ? '路面電車' : '電車';
@@ -617,6 +617,7 @@ async function importForm(rows) {
     const id = fk(g('sid')); if (!id) { skip++; continue; }
     const s = { ...(seen[id] || students()[id] || {}) };   // 同じ人が2回答えていたら後の行（新しい方）で上書き
     if (g('name')) s.name = g('name');
+    if (g('ped')) s.ped = /^希望する/.test(g('ped'));   // 2026-10-22 フォームに足した設問（前の回答には無い＝今の値のまま）
     const st = stClean(g('st'), formKind(g('kind'))), kind = formKind(g('kind'));
     if (st !== stClean(s.st, s.stKind) || kind !== (s.stKind || '電車')) { s.stLoc = null; s.stAddr = null; }
     s.st = st; s.stKind = kind;
