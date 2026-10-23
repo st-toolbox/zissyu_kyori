@@ -1333,21 +1333,23 @@ document.querySelector('#v-prt').addEventListener('click', e => {
   doPrint(ts.map(listHtml).join(''));
 });
 function listHtml(t) {
-  const A = asg(t), fids = facsOf(t), lock = (Y().locks || {})[t];
+  const A = asg(t), lock = (Y().locks || {})[t];
   let h = `<div class="pg list"><h1>${esc(S.year)}年度 ${t}実習 配置一覧</h1><div class="meta">${lock ? '確定：' + esc(lock.by) + ' ' + fmtAt(lock.at) : '（未確定）'}　印刷：${fmtAt(now())}</div>
-    <table><tr><th>施設</th><th>駅</th><th>始業</th><th>学生</th><th class="num">片道</th><th>内訳</th><th>印</th></tr>`;
-  for (const fid of fids) {
-    const f = S.facilities[fid], who = Object.keys(A).filter(sid => A[sid].fid === fid && students()[sid]);
-    if (!who.length) { h += `<tr><td>${esc(f.name)}</td><td>${esc(stName(f.station || ''))}</td><td>${esc(startOf(fid))}</td><td colspan="4" style="color:#888">（なし）</td></tr>`; continue; }
-    who.forEach((sid, i) => {
-      const ev = evalPair(sid, fid), b = ev.best, mk = mark(b && b.total);
-      const brk = !b ? '' : b.k === '車' ? '車で直接' : b.d ? doorBrk(b) : `${b.k === '実家' ? '実家・' : ''}${stName(b.b.st)}駅 ${b.b.mode}${b.b.min}＋電車${b.r.ride}＋${b.l3}`;
-      h += `<tr>${i === 0 ? `<td rowspan="${who.length}">${esc(f.name)}</td><td rowspan="${who.length}">${esc(stName(f.station || ''))}</td><td rowspan="${who.length}">${esc(startOf(fid))}</td>` : ''}
-        <td>${esc(students()[sid].name)}</td><td class="num">${fmtMin(b && b.total)}</td><td>${esc(brk)}</td><td>${mk.m}${b && ((b.r && b.r.shinkansen) || (b.d && b.d.shinkansen)) ? ' 新幹線' : ''}${isStay(ev) ? ' 宿泊' : ''}</td></tr>`;
-    });
+    <table><tr><th>学生</th><th>施設</th><th>駅</th><th>始業</th><th class="num">片道</th><th>内訳</th><th>印</th></tr>`;
+  // 学籍番号順（数字の部分は数として比べる）
+  const sids = [...new Set([...studsOf(t), ...Object.keys(A).filter(sid => students()[sid])])]
+    .sort((a, b) => a.localeCompare(b, 'ja', { numeric: true }));
+  for (const sid of sids) {
+    const fid = A[sid] && A[sid].fid, f = fid && S.facilities[fid];
+    if (!f) { h += `<tr><td>${esc(students()[sid].name)}</td><td colspan="6" style="color:#888">（未配置）</td></tr>`; continue; }
+    const ev = evalPair(sid, fid), b = ev.best, mk = mark(b && b.total);
+    const brk = !b ? '' : b.k === '車' ? '車で直接' : b.d ? doorBrk(b) : `${b.k === '実家' ? '実家・' : ''}${stName(b.b.st)}駅 ${b.b.mode}${b.b.min}＋電車${b.r.ride}＋${b.l3}`;
+    h += `<tr><td>${esc(students()[sid].name)}</td><td>${esc(f.name)}</td><td>${esc(stName(f.station || ''))}</td><td>${esc(startOf(fid))}</td>
+      <td class="num">${fmtMin(b && b.total)}</td><td>${esc(brk)}</td><td>${mk.m}${b && ((b.r && b.r.shinkansen) || (b.d && b.d.shinkansen)) ? ' 新幹線' : ''}${isStay(ev) ? ' 宿泊' : ''}</td></tr>`;
   }
-  const un = studsOf(t).filter(sid => !A[sid] || !S.facilities[A[sid].fid]);
-  if (un.length) h += `<tr><td colspan="7"><b>未配置：</b>${un.map(sid => esc(students()[sid].name)).join('、')}</td></tr>`;
+  const used = new Set(sids.map(sid => A[sid] && A[sid].fid));
+  const empty = facsOf(t).filter(fid => !used.has(fid));
+  if (empty.length) h += `<tr><td colspan="7"><b>学生のいない施設：</b>${empty.map(fid => esc(S.facilities[fid].name)).join('、')}</td></tr>`;
   return h + '</table></div>';
 }
 
