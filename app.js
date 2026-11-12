@@ -1396,14 +1396,14 @@ function routeSheetHtml(t, sid) {
       ${o ? `<tr class="tot"><td colspan="3">片道の合計${isStay(ev) ? '　<b>※片道が長いので宿泊の予定</b>' : ''}</td><td class="num">${mk.m} ${fmtMin(o.total)}</td></tr>` : ''}</table>
       ${dep || arr ? `<p class="note">目安：家を出る ${dep || '—'}　→　施設に着く ${arr || '—'}（始業 ${esc(startOf(fid))}）</p>` : ''}
       <p class="note">${o && o.k === '車' ? '車の時間は Google マップの見積もり（渋滞は入っていない）。' : '駅までの分数は確認票に書いた申告、電車・バスと歩きは Google マップの見積もり。'}実際とずれることがある。</p></div>
-    <div class="q"><div class="t">1. 実際にかかる時間を確かめる</div>
+    <div class="q"><div class="t">1. 実際にかかる時間と経路</div>
       <span class="ck2"><span class="bx"></span>実際に通ってみた</span><span class="ck2"><span class="bx"></span>乗換案内で調べた</span>　確かめた日　　　月　　日<br>
-      家を出る ${ln(14)} : ${ln(14)}　→　施設に着く ${ln(14)} : ${ln(14)}　　片道　約 ${ln(18)} 分</div>
+      家を出る ${ln(14)} : ${ln(14)}　→　施設に着く ${ln(14)} : ${ln(14)}　　片道　約 ${ln(18)} 分<br>
+      経路（乗る駅・路線・乗換・降りる駅・駅からの手段）<br>${ln(170)}<br>${ln(170)}</div>
     <div class="q"><div class="t">2. 経路の変更</div>
-      <span class="ck2"><span class="bx"></span>上の経路で通う（変更なし）</span><span class="ck2"><span class="bx"></span>変更する（下に書く）</span><br>
-      変更後の経路（乗る駅・路線・乗換・降りる駅・駅からの手段）<br>${ln(170)}<br>${ln(170)}<br>
-      変更後の片道　約 ${ln(18)} 分　　変える理由 ${ln(75)}</div>
-    <div class="sign"><span class="ck2"><span class="bx"></span><b>上の経路（変更したときは 2. に書いた経路）で実習先へ通うことに同意します。</b></span><br>
+      <span class="ck2"><span class="bx"></span>上の学校が調べた経路と同じ（変更なし）</span><span class="ck2"><span class="bx"></span>変更する</span><br>
+      変える理由 ${ln(150)}</div>
+    <div class="sign"><span class="ck2"><span class="bx"></span><b>1. に書いた時間と経路で実習先へ通うことに同意します。</b></span><br>
       記入日　　　　年　　月　　日　　　　本人の署名 ${ln(55)}</div>
     ${lock ? '' : '<p class="note" style="margin-top:4mm">（配置は未確定の時点で印刷）</p>'}</div>`;
 }
