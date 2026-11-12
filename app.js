@@ -1405,7 +1405,7 @@ function routeSheetHtml(t, sid) {
       変更後の片道　約 ${ln(18)} 分　　変える理由 ${ln(75)}</div>
     <div class="sign"><span class="ck2"><span class="bx"></span><b>上の経路（変更したときは 2. に書いた経路）で実習先へ通うことに同意します。</b></span><br>
       記入日　　　　年　　月　　日　　　　本人の署名 ${ln(55)}</div>
-    <p class="note" style="margin-top:4mm">提出の締め切り　　　月　　日　　　先生記入欄：受け取り日　　　月　　日　　確認者 ________${lock ? '' : '　（配置は未確定の時点で印刷）'}</p></div>`;
+    ${lock ? '' : '<p class="note" style="margin-top:4mm">（配置は未確定の時点で印刷）</p>'}</div>`;
 }
 document.querySelector('#v-prt').addEventListener('click', e => {
   const b = e.target.closest('button[data-route]'); if (!b) return;
