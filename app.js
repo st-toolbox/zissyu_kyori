@@ -670,6 +670,7 @@ $('prt-form').onclick = async () => {
 // フォームの3つのリンク（年度ごと・years/<年度>/form）
 const FORM_LINKS = [['pub', '学生に配る URL'], ['edit', 'フォームを直す URL'], ['sheet', '回答の表']];
 function renderPrt() {
+  fillRsSid();
   const f = Y().form || {};
   $('form-links').innerHTML = FORM_LINKS.map(([k, l]) => `<div class="row"><label style="min-width:9em">${l}</label>
     <input id="fl-${k}" type="url" style="flex:1;min-width:16em" value="${esc(f[k] || '')}" placeholder="https://...">
@@ -1352,6 +1353,75 @@ function listHtml(t) {
   if (empty.length) h += `<tr><td colspan="7"><b>学生のいない施設：</b>${empty.map(fid => esc(S.facilities[fid].name)).join('、')}</td></tr>`;
   return h + '</table></div>';
 }
+
+// 通学経路の確認書（学生1人1枚）：学校が出した経路を刷り込み、本人が実際の時間・経路の変更・同意を書く
+const addHm = (hm, d) => {
+  if (!/^\d{1,2}:\d{2}$/.test(hm || '') || d == null) return '';
+  let t = hm.split(':').map(Number).reduce((h, m) => h * 60 + m) + d; t = ((t % 1440) + 1440) % 1440;
+  return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+};
+const sortSid = a => a.sort((x, y) => x.localeCompare(y, 'ja', { numeric: true }));
+function routeSheetHtml(t, sid) {
+  const s = students()[sid] || {}, A = asg(t), fid = A[sid] && A[sid].fid, f = fid && S.facilities[fid];
+  if (!f) return '';
+  const ev = evalPair(sid, fid), o = ev.best, mk = mark(o && o.total), lock = (Y().locks || {})[t];
+  const from = !o ? '' : { 'ふだん': 'ふだんの家から', '実家': '実家から', '住所から': '家から', '実家の住所から': '実家から', '車': '車で直接' }[o.k] || o.k;
+  const row = (a, b, c, d) => `<tr><td>${a}</td><td>${b}</td><td>${c}</td><td class="num">${d}</td></tr>`;
+  let rows = '', dep = '', arr = '';
+  if (!o) rows = `<tr><td colspan="4">経路がまだ出ていない（${esc(ev.errs.join('／') || '未計算')}）。下の欄に自分で調べた経路を書く。</td></tr>`;
+  else if (o.k === '車') rows = row('家', '施設', '車（自分で運転）', o.total + '分');
+  else if (o.d) {
+    const d = o.d, ride = o.total - (d.walk1 || 0) - (d.walk2 || 0);
+    rows = row(o.k === '実家の住所から' ? '実家' : '家', '乗る駅・停留所', '歩き', (d.walk1 ?? 0) + '分')
+      + (d.lines ? row('', '', `${esc(d.lines)}<div class="sub">${esc(d.dep || '?')}発 → ${esc(d.arr || '?')}着・乗換${d.transfers ?? 0}回${d.shinkansen ? '・新幹線' : ''}</div>`, ride + '分') : '')
+      + row('降りる駅・停留所', '施設', '歩き', (d.walk2 ?? 0) + '分');
+    dep = addHm(d.dep, -(d.walk1 || 0)); arr = addHm(d.arr, d.walk2 || 0);
+  } else {
+    const b = o.b, r = o.r, fst = stName(f.station) + (f.stopKind && f.stopKind !== '電車' ? '（' + f.stopKind + '）' : '駅');
+    rows = row(o.k === '実家' ? '実家' : '家', esc(stLabel(b.st, b.kind)) + (isTrain(b.kind) ? '駅' : ''), esc(b.mode), b.min + '分')
+      + row(esc(stLabel(b.st, b.kind)) + (isTrain(b.kind) ? '駅' : ''), esc(fst), `${esc(r.lines || '電車・バス')}<div class="sub">${esc(r.dep || '?')}発 → ${esc(r.arr || '?')}着・乗換${r.transfers ?? 0}回${r.shinkansen ? '・新幹線' : ''}</div>`, r.ride + '分')
+      + row(esc(fst), '施設', esc(f.access || '徒歩'), o.l3 + '分');
+    dep = addHm(r.dep, -b.min); arr = addHm(r.arr, o.l3);
+  }
+  const ln = (w) => `<span class="ln" style="min-width:${w}mm"></span>`;
+  return `<div class="pg slip rs"><h1>実習の通学経路 確認書</h1>
+    <div class="meta"><span>${esc(S.year)}年度 ${esc(t)}実習</span><span>学籍番号 ${esc(sid)}</span><span>名前 ${esc(s.name || '')}</span></div>
+    <div class="q"><div class="t">実習先</div>
+      <table class="kv"><tr><td>施設</td><td><b>${esc(f.name)}</b></td></tr>
+      ${f.address ? `<tr><td>住所</td><td>${esc(f.address)}</td></tr>` : ''}
+      <tr><td>最寄り</td><td>${f.station ? esc(stName(f.station)) + (f.stopKind && f.stopKind !== '電車' ? '（' + esc(f.stopKind) + '）' : '駅') : '—'}</td></tr>
+      <tr><td>始業</td><td>${esc(startOf(fid))}</td></tr></table></div>
+    <div class="q"><div class="t">学校が調べた経路（${esc(from)}）</div>
+      <table class="rt"><tr><th>から</th><th>まで</th><th>手段</th><th class="num">時間</th></tr>${rows}
+      ${o ? `<tr class="tot"><td colspan="3">片道の合計${isStay(ev) ? '　<b>※片道が長いので宿泊の予定</b>' : ''}</td><td class="num">${mk.m} ${fmtMin(o.total)}</td></tr>` : ''}</table>
+      ${dep || arr ? `<p class="note">目安：家を出る ${dep || '—'}　→　施設に着く ${arr || '—'}（始業 ${esc(startOf(fid))}）</p>` : ''}
+      <p class="note">${o && o.k === '車' ? '車の時間は Google マップの見積もり（渋滞は入っていない）。' : '駅までの分数は確認票に書いた申告、電車・バスと歩きは Google マップの見積もり。'}実際とずれることがある。</p></div>
+    <div class="q"><div class="t">1. 実際にかかる時間を確かめる</div>
+      <span class="ck2"><span class="bx"></span>実際に通ってみた</span><span class="ck2"><span class="bx"></span>乗換案内で調べた</span>　確かめた日　　　月　　日<br>
+      家を出る ${ln(14)} : ${ln(14)}　→　施設に着く ${ln(14)} : ${ln(14)}　　片道　約 ${ln(18)} 分</div>
+    <div class="q"><div class="t">2. 経路の変更</div>
+      <span class="ck2"><span class="bx"></span>上の経路で通う（変更なし）</span><span class="ck2"><span class="bx"></span>変更する（下に書く）</span><br>
+      変更後の経路（乗る駅・路線・乗換・降りる駅・駅からの手段）<br>${ln(170)}<br>${ln(170)}<br>
+      変更後の片道　約 ${ln(18)} 分　　変える理由 ${ln(75)}</div>
+    <div class="sign"><span class="ck2"><span class="bx"></span><b>上の経路（変更したときは 2. に書いた経路）で実習先へ通うことに同意します。</b></span><br>
+      記入日　　　　年　　月　　日　　　　本人の署名 ${ln(55)}</div>
+    <p class="note" style="margin-top:4mm">提出の締め切り　　　月　　日　　　先生記入欄：受け取り日　　　月　　日　　確認者 ________${lock ? '' : '　（配置は未確定の時点で印刷）'}</p></div>`;
+}
+document.querySelector('#v-prt').addEventListener('click', e => {
+  const b = e.target.closest('button[data-route]'); if (!b) return;
+  const t = b.dataset.route, A = asg(t);
+  const sids = sortSid(Object.keys(A).filter(sid => students()[sid] && S.facilities[A[sid].fid]));
+  if (!sids.length) return toast(`${t}の配置がまだ無い`);
+  if (!(Y().locks || {})[t] && !confirm(`${t}はまだ確定していない。今の配置で刷る？`)) return;
+  doPrint(sids.map(sid => routeSheetHtml(t, sid)).join(''));
+});
+function fillRsSid() {
+  const t = $('rs-type').value, A = asg(t), cur = $('rs-sid').value;
+  const sids = sortSid(Object.keys(A).filter(sid => students()[sid] && S.facilities[A[sid].fid]));
+  $('rs-sid').innerHTML = sids.length ? sids.map(sid => `<option value="${esc(sid)}"${sid === cur ? ' selected' : ''}>${esc(sid)} ${esc(students()[sid].name || '')}</option>`).join('') : '<option value="">（配置がまだ無い）</option>';
+}
+$('rs-type').onchange = fillRsSid;
+$('rs-one').onclick = () => { const sid = $('rs-sid').value; if (!sid) return toast('学生を選ぶ'); doPrint(routeSheetHtml($('rs-type').value, sid)); };
 
 // ===== 先生 =====
 function renderTch() {

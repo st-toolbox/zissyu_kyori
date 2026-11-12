@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
-<link rel="stylesheet" href="style.css?v=20261022j">
+<link rel="stylesheet" href="style.css?v=20261112a">
 </head>
 <body>
 
@@ -132,8 +132,11 @@
         <div class="row"><button class="primary" data-list="評価">評価</button><button class="primary" data-list="総合">総合</button><button class="primary" data-list="見学">見学</button><button data-list="all">3つまとめて</button></div>
       </div>
       <div class="box">
-        <h2 style="margin-top:0">学生ごとの経路の紙</h2>
-        <p class="hint">今は配っていない。要るとなったら作る。</p>
+        <h2 style="margin-top:0">通学経路の確認書（学生ごと・A4 1枚）</h2>
+        <p class="hint">配置が決まったら配る。学校が出した経路と片道の時間を刷り込み、本人が実際にかかる時間・経路を変えるかを書いて、同意にチェックと署名をして出す。学籍番号順・配置のある学生だけ。</p>
+        <div class="row"><button class="primary" data-route="評価">評価</button><button class="primary" data-route="総合">総合</button><button class="primary" data-route="見学">見学</button></div>
+        <div class="row" style="margin-top:6px"><select id="rs-type"><option>評価</option><option>総合</option><option>見学</option></select>
+          <select id="rs-sid" style="min-width:14em"></select><button id="rs-one">この学生だけ</button></div>
       </div>
     </section>
 
@@ -241,6 +244,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
-<script src="app.js?v=20261022k"></script>
+<script src="app.js?v=20261112a"></script>
 </body>
 </html>

@@ -196,6 +196,19 @@ td.cg i, .hint i { font-style: normal; font-size: 10px; color: var(--ok); margin
 .slip .ck2 { margin-right: 6mm; white-space: nowrap; }
 .slip .note { font-size: 9.5pt; color: #333; margin: 0; line-height: 1.5; }
 .slip .sign { margin-top: 8mm; border-top: 1.5px solid #000; padding-top: 4mm; line-height: 2.6; }
+.rs h1 { margin-bottom: 2mm; }
+.rs .meta { margin-bottom: 3mm; }
+.rs .q { line-height: 1.9; margin-bottom: 2.5mm; padding: 2mm 4mm; }
+.rs table { width: 100%; border-collapse: collapse; font-size: 10pt; line-height: 1.4; }
+.rs table td, .rs table th { padding: 1mm 1.5mm; vertical-align: top; text-align: left; }
+.rs table .num { text-align: right; white-space: nowrap; }
+.rs .kv td { border: 0; padding: .3mm 1.5mm; }
+.rs .kv td:first-child { width: 14mm; color: #333; }
+.rs .rt th { border-bottom: 1px solid #000; font-weight: 700; }
+.rs .rt td { border-bottom: .5px solid #999; }
+.rs .rt .tot td { border-top: 1.5px solid #000; border-bottom: 0; font-weight: 700; }
+.rs .rt .sub { font-size: 8.5pt; color: #333; }
+.rs .sign { margin-top: 4mm; line-height: 2.4; }
 .list h1 { font-size: 15pt; margin: 0 0 3mm; }
 .list .meta { font-size: 9pt; color: #333; margin-bottom: 3mm; }
 
